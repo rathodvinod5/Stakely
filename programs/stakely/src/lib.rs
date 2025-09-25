@@ -19,8 +19,27 @@ pub mod stakely {
         Ok(())
     }
 
-    pub fn deposit(ctx: Context<DepositAndDelegate>) -> Result<()> {
+    pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>) -> Result<()> {
         deposit_and_delegate(ctx);
+        Ok(())
+    }
+
+    pub fn request_unstake(ctx: Context<RequestUnstake>) -> Result<()> {
+        request_unstake(ctx);
+        Ok(())
+    }
+
+    pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>) -> Result<()> {
+        mock_accrue_rewards(ctx);
+        Ok(())
+    }
+
+    pub fn deactivate_and_withdraw(ctx: Context<DeactivateAndWithdraw>) -> Result<()> {
+        deactivate_and_withdraw(ctx);
         Ok(())
     }
 }
