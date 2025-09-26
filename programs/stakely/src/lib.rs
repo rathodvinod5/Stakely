@@ -14,8 +14,8 @@ pub mod stakely {
 
     use super::*;
 
-    pub fn initialize(ctx: Context<InitializePool>) -> Result<()> {
-        initialize_pool(ctx);
+    pub fn initialize(ctx: Context<InitializePool>, lst_decimals: u8) -> Result<()> {
+        initialize_pool(ctx, lst_decimals);
         Ok(())
     }
 
