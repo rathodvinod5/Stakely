@@ -7,18 +7,22 @@ use crate::states::{ Pool };
 // - Creates Pool account (PDA)
 // - Creates LST mint (SPL) with pool as mint authority (PDA)
 // - Creates reserve PDA (System account) to hold liquid lamports
-pub fn initialize_pool(ctx: Context<InitializePool>) -> Result<()> {
+pub fn initialize_pool(ctx: Context<InitializePool>, lst_decimals: u8) -> Result<()> {
+    // Initialize the mint to be controlled by pool PDA
+    // (We use CPI outside - the Anchor macro already ensured mint account exists).
     let pool = &mut ctx.accounts.pool;
+    let decimals = ctx.accounts.lst_mint.decimals;
 
     pool.admin = ctx.accounts.admin.key();
-    pool.reserve = ctx.accounts.reserve.key();
     pool.lst_mint = ctx.accounts.lst_mint.key();
     pool.reserve = ctx.accounts.reserve.key();
+    pool.bump = ctx.bumps.pool;
+    // pool.lst_decimals = lst_decimals;
+    pool.lst_decimals = decimals;
     pool.total_staked = 0u128;
-    pool.total_lst_mint = 0128;
+    pool.total_list_mint = 0u128;
     pool.staked_count = 0;
     pool.unstaked_count = 0;
-    pool.bump = ctx.bumps.pool;
 
     Ok(())
 }
@@ -26,13 +30,11 @@ pub fn initialize_pool(ctx: Context<InitializePool>) -> Result<()> {
 #[derive(Accounts)]
 pub struct InitializePool<'info> {
     #[account(mut, signer)]
-    pub admin: AccountInfo<'info>, // AccountInfo indicates it can be wallet, PDA or DAO
+    pub admin: AccountInfo<'info>,
 
-    // CHECK: mint created by client and passed in. We'll set pool.lst_mint to it.
     #[account(mut)]
     pub lst_mint: Account<'info, Mint>,
 
-    // Pool PDA - created off-chain with seeds ["pool"].
     #[account(
         init,
         payer = admin,
@@ -42,8 +44,6 @@ pub struct InitializePool<'info> {
     )]
     pub pool: Account<'info, Pool>,
 
-    // Reserve PDA: program-derived system account to hold lamports for liquidity
-    // We'll create it as a system account with seeds ["pool_reserve"]
     #[account(
         init,
         payer = admin,
@@ -53,13 +53,13 @@ pub struct InitializePool<'info> {
     )]
     pub reserve: AccountInfo<'info>,
 
-    // This is the signer PDA used to mint tokens (pool PDA)
-    // CHECK: we use pool as signer for the mint CPI
-    // In CPI we pass pool_signer as authority
-    #[account(seeds = [b"pool"], bump)]
+    #[account(
+        seeds = [b"pool"],
+        bump
+    )]
     pub pool_signer: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
+    pub token_account: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>
 }
