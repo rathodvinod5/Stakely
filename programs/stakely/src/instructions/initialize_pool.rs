@@ -8,6 +8,18 @@ use crate::states::{ Pool };
 // - Creates LST mint (SPL) with pool as mint authority (PDA)
 // - Creates reserve PDA (System account) to hold liquid lamports
 pub fn initialize_pool(ctx: Context<InitializePool>) -> Result<()> {
+    let pool = &mut ctx.accounts.pool;
+
+    pool.admin = ctx.accounts.admin.key();
+    pool.reserve = ctx.accounts.reserve.key();
+    pool.lst_mint = ctx.accounts.lst_mint.key();
+    pool.reserve = ctx.accounts.reserve.key();
+    pool.total_staked = 0u128;
+    pool.total_lst_mint = 0128;
+    pool.staked_count = 0;
+    pool.unstaked_count = 0;
+    pool.bump = ctx.bumps.pool;
+
     Ok(())
 }
 
