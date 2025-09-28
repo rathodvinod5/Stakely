@@ -21,10 +21,12 @@ pub struct StakeEntry {
     pub validator_voter: Pubkey,
     pub stake_account: Pubkey,
     pub deposited_lamports: u128,
+    pub status: StakeStatus,
     pub index: u64,
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace, PartialEq, Eq, Debug)]
 pub enum StakeStatus {
     Active,
-    Deactive
+    Deactive,
 }

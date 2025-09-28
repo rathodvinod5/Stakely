@@ -3,9 +3,9 @@ use anchor_lang::prelude::*;
 // use solana_program::stake;
 use solana_stake_interface as stake;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
-use anchor_lang::solana_program::native_token::LAMPORTS_PER_SOL;
+// use anchor_lang::solana_program::native_token::LAMPORTS_PER_SOL;
 
-use crate::states::{ Pool, StakeEntry };
+use crate::states::{ Pool, StakeEntry, StakeStatus };
 use crate::errors::CustomErrors;
 
 // Deposit and delegate:
@@ -26,6 +26,30 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
 
     let rent_exempt = Rent::get()?.minimum_balance(std::mem::size_of::<stake::state::StakeStateV2>());
     require!((stake_amount > 0) || (actual_stake_amount >= rent_exempt + stake_amount), CustomErrors::InsufficientStakeAmount);
+
+    // System create account: create a new account owned by stake program
+    // The client must include the `stake_account` as a signer (it will be a new ephemeral Keypair)
+    // But in Anchor, to create a stake account, we usually create it off-chain and include it as signer.
+    // For simpler flows we rely on the client to create the stake account Keypair and fund it with lamports.
+    // (Anchor can't `create_account` into stake program with signer generated here.)
+    //
+    // For demonstration, ensure stake account has been created & initialized by client.
+    // We'll perform the delegate CPI to stake program now:
+
+    // Initialize stake account: we call stake::instruction::initialize (stake_authority = pool PDA)
+    // But to keep simple, we set staker/withdrawer to pool PDA (so program can manage)
+    // let stake_authority = pool.key();
+    // let withdraw_authority = pool.key();
+
+    // Note: we expect the stake account was created and contains `stake_amount` lamports.
+    // Caller must create & fund it before calling this instruction (typical pattern).
+    // Now delegate it:
+    // let vote_pubkey = ctx.accounts.validator_vote.key();
+    // let ix_delegate = stake::instruction::delegate_stake(
+    //     &ctx.accounts.stake_account.key(),
+    //     &stake_authority,
+    //     &vote_pubkey,
+    // );
 
     // transfer sol from stake_account to reserve account
     **stake_account.try_borrow_mut_lamports()? -= stake_amount;
@@ -63,13 +87,31 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
     // END OF ALTERNATIVE WAY
 
 
-    // Calculate lst to mint to user ata
+    // We need to sign for authority: since stake_account's staker is pool PDA, delegate requires
+    // pool PDA to sign as stake authority. But pool PDA is a program derived address and not a signer.
+    // To perform delegation we must make the stake account's staker be a real keypair OR use stake_authorize to set authority.
+    //
+    // To keep this Anchor-only example workable, we'll assume the client created the stake account
+    // with staker/withdrawer set to the client (depositor) and authorized to the pool via `stake_authorize` CPI.
+    // This is complex in a single TX; to keep the example in scope, we'll instead:
+    // - Accept that the stake account is already delegated by the client OR
+    // - Use a simpler flow: deposit -> move lamports into pool reserve (liquidity) and mint LST,
+    //   then off-chain keepers create stake accounts and delegate them from the reserve to validators.
+    //
+    // For this code example: we'll mint LST proportional to stake_amount and create a StakeEntry record.
+
+    // Mint LST to user proportional to current exchange rate
+    // Compute amount of LST to mint:
     let mut lst_mint_amount = 0u128;
     if pool.total_staked == 0 && pool.total_lst_minted == 0 {
+        // First deposit: 1 LST per SOL (scaled by decimals)
+        // lst = amount * 10^lst_decimals
         lst_mint_amount = (stake_amount as u128)
             .checked_mul(10u128.pow(pool.lst_decimals as u32))
             .unwrap();
     } else {
+        // lst = amount * (total_lst_supply / total_staked)
+        // lst_to_mint = stake_amount * total_lst_supply / total_staked
         lst_mint_amount = (stake_amount as u128)
             .checked_mul(pool.total_lst_minted).unwrap()
             .checked_div(pool.total_staked).unwrap();
@@ -85,6 +127,8 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
     let seeds = &[b"pool".as_ref(), &[pool.bump]];
     let signer_seeds = &[&seeds[..]];
     let mint_context = CpiContext::new_with_signer(token_program, accounts, signer_seeds);
+
+    // safe to cast to u64 because decimals scale may make it big; ensure it fits
     let mint_amount = lst_mint_amount
         .try_into()
         .map_err(|_| error!(CustomErrors::MathOverflow))?;
@@ -101,6 +145,7 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
     stake_entry.validator_voter = ctx.accounts.validator_vote.key();
     stake_entry.stake_account = stake_account.key();
     stake_entry.deposited_lamports = stake_amount as u128;
+    stake_entry.status = StakeStatus::Active;
     stake_entry.index = pool.staked_count;
 
     // update pool.stake_count
