@@ -10,6 +10,12 @@ pub enum CustomErrors {
     InsufficientBalance,
     #[msg("Reserve out of balance")]
     ReserveOutOfBalance,
+    #[msg("Insufficient user token balance")]
+    InsufficientUserTokenBalance,
     #[msg("Insufficient stake amount")]
-    InsufficientStakeAmount
+    InsufficientStakeAmount,
+    #[msg("No active stake")]
+    NoActiveStake,
+    #[msg("Empty pool")]
+    EmptyPool
 }
