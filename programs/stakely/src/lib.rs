@@ -19,8 +19,8 @@ pub mod stakely {
         Ok(())
     }
 
-    pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>) -> Result<()> {
-        deposit_and_delegate(ctx);
+    pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64) -> Result<()> {
+        deposit_and_delegate(ctx, stake_amount);
         Ok(())
     }
 

@@ -8,7 +8,7 @@ pub struct Pool {
     pub lst_mint: Pubkey,
     pub bump: u8,
     pub total_staked: u128,
-    pub total_list_mint: u128,
+    pub total_lst_minted: u128,
     pub staked_count: u64,
     pub unstaked_count: u64,
     pub lst_decimals: u8,
@@ -21,10 +21,12 @@ pub struct StakeEntry {
     pub validator_voter: Pubkey,
     pub stake_account: Pubkey,
     pub deposited_lamports: u128,
+    pub status: StakeStatus,
     pub index: u64,
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace, PartialEq, Eq, Debug)]
 pub enum StakeStatus {
     Active,
-    Deactive
+    Deactive,
 }
