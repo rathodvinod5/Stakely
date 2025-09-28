@@ -20,7 +20,7 @@ pub fn initialize_pool(ctx: Context<InitializePool>, lst_decimals: u8) -> Result
     // pool.lst_decimals = lst_decimals;
     pool.lst_decimals = decimals;
     pool.total_staked = 0u128;
-    pool.total_list_mint = 0u128;
+    pool.total_lst_minted = 0u128;
     pool.staked_count = 0;
     pool.unstaked_count = 0;
 
