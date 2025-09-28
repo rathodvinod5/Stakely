@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-// use anchor_spl::token_2022::MintTo;
 // use solana_program::stake;
 use solana_stake_interface as stake;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};

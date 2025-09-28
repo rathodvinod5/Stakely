@@ -25,6 +25,16 @@ pub struct StakeEntry {
     pub index: u64,
 }
 
+#[account]
+#[derive(InitSpace)]
+pub struct UnstakeTicket {
+    pub pool: Pubkey,
+    pub requester: Pubkey,
+    pub requested_lamports: u128,
+    pub released: bool,
+    pub index: u64,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace, PartialEq, Eq, Debug)]
 pub enum StakeStatus {
     Active,
