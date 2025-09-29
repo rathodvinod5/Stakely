@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_lang::system_program::transfer;
-use solana_program::program::invoke_signed;
-use solana_program::system_instruction;
+use anchor_lang::solana_program::system_instruction:: { transfer };
+use anchor_lang::solana_program::program::{ invoke_signed };
 
 use crate::states::{ Pool, UnstakeTicket };
 use crate::errors::{ CustomErrors };
@@ -31,7 +30,7 @@ pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
     let signers_seeds = &[&seeds[..]];
     let system_program = &ctx.accounts.system_program;
 
-    let instructions = system_instruction::transfer(
+    let instructions = transfer(
         &ctx.accounts.reserve.key(), 
         &unstake_ticket.requester.key(), 
         requested_lamports
