@@ -24,8 +24,8 @@ pub mod stakely {
         Ok(())
     }
 
-    pub fn request_unstake(ctx: Context<RequestUnstake>) -> Result<()> {
-        request_unstake(ctx);
+    pub fn request_unstake(ctx: Context<RequestUnstake>, unstake_token_lst_amount: u64) -> Result<()> {
+        request_unstake(ctx, unstake_token_lst_amount);
         Ok(())
     }
 

@@ -17,5 +17,7 @@ pub enum CustomErrors {
     #[msg("No active stake")]
     NoActiveStake,
     #[msg("Empty pool")]
-    EmptyPool
+    EmptyPool,
+    #[msg("Fund already released!")]
+    FundAlreadyReleased
 }
