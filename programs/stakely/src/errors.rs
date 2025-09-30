@@ -19,5 +19,7 @@ pub enum CustomErrors {
     #[msg("Empty pool")]
     EmptyPool,
     #[msg("Fund already released!")]
-    FundAlreadyReleased
+    FundAlreadyReleased,
+    #[msg("")]
+    KeyMismatch
 }

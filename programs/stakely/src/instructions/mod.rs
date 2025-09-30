@@ -15,3 +15,6 @@ pub mod mock_accrue_rewards;
 
 pub use deactivate_stake::*;
 pub mod deactivate_stake;
+
+pub use withdraw_stake::*;
+pub mod withdraw_stake;
