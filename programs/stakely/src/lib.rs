@@ -10,7 +10,6 @@ declare_id!("BhHah6xCWoHUvE2gyqba5vSTTyRYHzyjjTsqXX55H4AV");
 
 #[program]
 pub mod stakely {
-    use crate::instructions::initialize_pool;
 
     use super::*;
 
@@ -38,8 +37,8 @@ pub mod stakely {
         Ok(())
     }
 
-    pub fn deactivate_and_withdraw(ctx: Context<DeactivateAndWithdraw>) -> Result<()> {
-        deactivate_and_withdraw(ctx);
+    pub fn deactivate_stake_account(ctx: Context<DeactivateStakeAccount>) -> Result<()> {
+        deactivate_stake_account(ctx);
         Ok(())
     }
 }
