@@ -12,6 +12,8 @@ pub struct Pool {
     pub staked_count: u64,
     pub unstaked_count: u64,
     pub lst_decimals: u8,
+    #[max_len(1024)] // Set the maximum length as appropriate for your use case
+    pub deactivating_stakes: Vec<Pubkey>,
 }
 
 #[account]
@@ -38,5 +40,6 @@ pub struct UnstakeTicket {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace, PartialEq, Eq, Debug)]
 pub enum StakeStatus {
     Active,
+    Deactivating,
     Deactive,
 }
