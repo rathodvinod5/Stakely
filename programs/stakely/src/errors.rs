@@ -20,6 +20,10 @@ pub enum CustomErrors {
     EmptyPool,
     #[msg("Fund already released!")]
     FundAlreadyReleased,
-    #[msg("")]
-    KeyMismatch
+    #[msg("Key mismatch")]
+    KeyMismatch,
+    #[msg("Invalid stake account")]
+    InvalidStakeAccount,
+    #[msg("Stake account not deactivated!")]
+    StakeNotDeactivated
 }
