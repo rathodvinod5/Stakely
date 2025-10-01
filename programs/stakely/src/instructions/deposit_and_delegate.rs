@@ -50,9 +50,10 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
     //     &vote_pubkey,
     // );
 
+    
     // transfer sol from stake_account to reserve account
-    **stake_account.try_borrow_mut_lamports()? -= stake_amount;
-    **reserve_account.try_borrow_mut_lamports()? += stake_amount;
+    // **stake_account.try_borrow_mut_lamports()? -= stake_amount;
+    // **reserve_account.try_borrow_mut_lamports()? += stake_amount;
 
     // ALTERNATE WAY TO TRANSFER SOL
     // =================================================================
