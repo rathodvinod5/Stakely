@@ -18,12 +18,12 @@ pub mod stakely {
         Ok(())
     }
 
-    pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64) -> Result<()> {
+    pub fn deposit_stake(ctx: Context<DepositAndDelegate>, stake_amount: u64) -> Result<()> {
         deposit_and_delegate(ctx, stake_amount);
         Ok(())
     }
 
-    pub fn request_unstake(ctx: Context<RequestUnstake>, unstake_token_lst_amount: u64) -> Result<()> {
+    pub fn unstake(ctx: Context<RequestUnstake>, unstake_token_lst_amount: u64) -> Result<()> {
         request_unstake(ctx, unstake_token_lst_amount);
         Ok(())
     }
@@ -32,12 +32,12 @@ pub mod stakely {
         Ok(())
     }
 
-    pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>) -> Result<()> {
-        mock_accrue_rewards(ctx);
+    pub fn accrue_rewards(ctx: Context<MockAccrueRewards>, reawrd_lamprts: u64) -> Result<()> {
+        mock_accrue_rewards(ctx, reawrd_lamprts);
         Ok(())
     }
 
-    pub fn deactivate_stake_account(ctx: Context<DeactivateStakeAccount>) -> Result<()> {
+    pub fn deactivate_account(ctx: Context<DeactivateStakeAccount>) -> Result<()> {
         deactivate_stake_account(ctx);
         Ok(())
     }
