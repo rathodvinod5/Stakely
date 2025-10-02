@@ -25,5 +25,7 @@ pub enum CustomErrors {
     #[msg("Invalid stake account")]
     InvalidStakeAccount,
     #[msg("Stake account not deactivated!")]
-    StakeNotDeactivated
+    StakeNotYetDeactivated,
+    #[msg("Invalid stake state")]
+    InvalidStakeState
 }
