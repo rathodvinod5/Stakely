@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 // use solana_program::stake;
-use solana_stake_interface as stake;
+// use solana_stake_interface as stake;
+use anchor_lang::solana_program::stake;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 // use anchor_lang::solana_program::native_token::LAMPORTS_PER_SOL;
 
@@ -21,7 +22,9 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
 
     let actual_stake_amount = stake_account.lamports();
 
-    require!(stake_account.owner == &Pubkey::from(solana_program::stake::program::ID), CustomErrors::NotTheOwner);
+    // require!(stake_account.owner == &Pubkey::from(solana_program::stake::program::ID), CustomErrors::NotTheOwner);
+    require!(stake_account.owner == &Pubkey::from(crate::program::Stakely::id()), CustomErrors::NotTheOwner);
+
 
     let rent_exempt = Rent::get()?.minimum_balance(std::mem::size_of::<stake::state::StakeStateV2>());
     require!((stake_amount > 0) || (actual_stake_amount >= rent_exempt + stake_amount), CustomErrors::InsufficientStakeAmount);
@@ -105,13 +108,13 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
     let mut lst_mint_amount = 0u128;
     if pool.total_staked == 0 && pool.total_lst_minted == 0 {
         // First deposit: 1 LST per SOL (scaled by decimals)
-        // lst = amount * 10^lst_decimals
+        // lst = stake_amount * 10^lst_decimals
         lst_mint_amount = (stake_amount as u128)
             .checked_mul(10u128.pow(pool.lst_decimals as u32))
             .unwrap();
     } else {
-        // lst = amount * (total_lst_supply / total_staked)
-        // lst_to_mint = stake_amount * total_lst_supply / total_staked
+        // lst = amount * (total_lst_supply / total_staked) or
+        // lst_to_mint = stake_amount * total_lst_minted / total_staked
         lst_mint_amount = (stake_amount as u128)
             .checked_mul(pool.total_lst_minted).unwrap()
             .checked_div(pool.total_staked).unwrap();
@@ -156,25 +159,30 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
 
 #[derive(Accounts)]
 pub struct DepositAndDelegate<'info> {
+
+    /// CHECK: This is the user depositing and delegating stake
     #[account(mut, signer)]
     pub user: AccountInfo<'info>,
 
     #[account(mut)]
     pub pool: Account<'info, Pool>,
 
+    /// CHECK: This is the stake account to be delegated
     #[account(mut)]
     pub stake_account: AccountInfo<'info>,
 
+    /// CHECK: This is the reserve account holding lamports
     #[account(mut)]
     pub reserve_account: AccountInfo<'info>,
 
+    /// CHECK: This is the validator vote account to delegate stake to
     #[account(mut)]
     pub validator_vote: AccountInfo<'info>,
 
     #[account(
         init,
         payer = user,
-        space = 8 + StakeEntry::INIT_SPACE,
+        space = StakeEntry::LEN,
         seeds = [b"stake_entry", stake_account.key().as_ref()],
         bump
     )]
@@ -186,6 +194,7 @@ pub struct DepositAndDelegate<'info> {
     #[account(mut)]
     pub user_token_ata: Account<'info, TokenAccount>,
 
+    /// CHECK: This is the pool signer PDA
     #[account(
         seeds = [b"pool"],
         bump = pool.bump
