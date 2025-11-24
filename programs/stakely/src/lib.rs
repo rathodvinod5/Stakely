@@ -28,17 +28,17 @@ pub mod stakely {
         Ok(())
     }
 
-    // pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
-    //     Ok(())
-    // }
+    pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
+        Ok(())
+    }
 
-    // pub fn accrue_rewards(ctx: Context<MockAccrueRewards>, reawrd_lamprts: u64) -> Result<()> {
-    //     mock_accrue_rewards(ctx, reawrd_lamprts);
-    //     Ok(())
-    // }
+    pub fn accrue_rewards(ctx: Context<MockAccrueRewards>, reawrd_lamprts: u64) -> Result<()> {
+        mock_accrue_rewards(ctx, reawrd_lamprts);
+        Ok(())
+    }
 
-    // pub fn deactivate_account(ctx: Context<DeactivateStakeAccount>) -> Result<()> {
-    //     deactivate_stake_account(ctx);
-    //     Ok(())
-    // }
+    pub fn deactivate_account(ctx: Context<DeactivateStakeAccount>) -> Result<()> {
+        deactivate_stake_account(ctx);
+        Ok(())
+    }
 }
