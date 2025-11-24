@@ -8,6 +8,8 @@ pub enum CustomErrors {
     NotTheOwner,
     #[msg("Insufficient balance")]
     InsufficientBalance,
+    #[msg("Insufficient token record")]
+    InsufficientTokensRecord,
     #[msg("Reserve out of balance")]
     ReserveOutOfBalance,
     #[msg("Insufficient user token balance")]
