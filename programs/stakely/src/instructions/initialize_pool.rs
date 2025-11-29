@@ -54,7 +54,7 @@ pub struct InitializePool<'info> {
         init,
         payer = admin,
         space = 8,
-        seeds = [],
+        seeds = [b"pool_reserve", pool.key().as_ref()],
         bump
     )]
     pub reserve: UncheckedAccount<'info>,

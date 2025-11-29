@@ -196,7 +196,7 @@ pub struct DepositAndDelegate<'info> {
 
     /// CHECK: This is the pool signer PDA
     #[account(
-        seeds = [b"pool"],
+        seeds = [b"pool", lst_mint.key().as_ref()],
         bump = pool.bump
     )]
     pub pool_signer: AccountInfo<'info>,

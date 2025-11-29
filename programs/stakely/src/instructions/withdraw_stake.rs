@@ -1,8 +1,12 @@
 use anchor_lang::prelude::*;
 use solana_program::{
-    stake::state::{StakeStateV2},
+    stake::{
+        state::{ StakeStateV2 },
+        instruction:: { withdraw }
+    },
     clock::Clock,
-    sysvar::Sysvar,
+    // sysvar::Sysvar,
+    program:: { invoke_signed }
 };
 use crate::states::{ Pool, StakeEntry, StakeStatus };
 use crate::errors::{ CustomErrors };
@@ -12,7 +16,7 @@ pub fn withdraw_stake(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
     let stake_account = &ctx.accounts.stake_account;
     let stake_entry = &mut ctx.accounts.stake_entry;
 
-     let clock: Clock = Clock::from_account_info(&ctx.accounts.clock_sysvar)?;
+    let clock: Clock = Clock::from_account_info(&ctx.accounts.clock_sysvar)?;
 
     // --- Load stake state ---
     let stake_state: StakeStateV2 = StakeStateV2::deserialize(&mut &ctx.accounts.stake_account.data.borrow()[..])
@@ -33,17 +37,17 @@ pub fn withdraw_stake(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
     require!(pool.deactivating_stakes.contains(&stake_account.key()), CustomErrors::InvalidStakeAccount);
     require!(stake_entry.status == StakeStatus::Deactivating, CustomErrors::StakeNotYetDeactivated);
 
-    let withdraw_ix = solana_program::stake::instruction::withdraw(
+    let withdraw_ix = withdraw( //solana_program::stake::instruction::withdraw
         &stake_account.key(), 
         &pool.key(), 
         &ctx.accounts.reserve.key(), 
         stake_entry.deposited_lamports.try_into().unwrap_or(u64::MAX), 
         None
     );
-    let seeds = &[b"pool".as_ref(), &[pool.bump]];
+    let seeds = &[b"pool", pool.lst_mint.as_ref(), &[pool.bump]];
     let signer_seeds = &[&seeds[..]];
     let stake_program = &ctx.accounts.stake_program;
-    let result = solana_program::program::invoke_signed(
+    let result = invoke_signed( //solana_program::program::invoke_signed
         &withdraw_ix, 
         &[
             stake_account.to_account_info(),

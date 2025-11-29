@@ -20,7 +20,7 @@ pub fn deactivate_stake_account(ctx: Context<DeactivateStakeAccount>) -> Result<
         &stake_account.key(), 
         &pool.key()
     );
-    let seeds = &[b"pool".as_ref(), &[pool.bump]];
+    let seeds = &[b"pool", pool.lst_mint.as_ref(), &[pool.bump]];
     let signer_seeds = &[&seeds[..]];
 
     let result = invoke_signed(

@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::system_instruction:: { transfer };
 use anchor_lang::solana_program::program::{ invoke_signed };
+use anchor_spl::token::{self, Mint };
+
 
 use crate::states::{ Pool, UnstakeTicket };
 use crate::errors::{ CustomErrors };
@@ -22,11 +24,11 @@ pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
             .try_into()
             .map_err(|_| error!(CustomErrors::MathOverflow))?;
 
-    require!(requested_lamports >= reserve_lamports, CustomErrors::InsufficientBalance);
+    require!(requested_lamports <= reserve_lamports, CustomErrors::InsufficientBalance);
 
     // Transfer lamports from reserve PDA to user
     // Since reserve is owned by system program and PDA controlled by program, use invoke_signed with reserve seeds
-    let seeds = [b"pool".as_ref(), &[pool.bump]];
+    let seeds = [b"pool".as_ref(), pool.lst_mint.as_ref(), &[pool.bump]];
     let signers_seeds = &[&seeds[..]];
     let system_program = &ctx.accounts.system_program;
 
@@ -58,9 +60,12 @@ pub struct ProcessUnstake<'info> {
     #[account(mut, has_one = reserve)]
     pub pool: Account<'info, Pool>,
 
+    // #[account(mut)]
+    // pub lst_mint: Account<'info, Mint>,
+
     #[account(
         mut,
-        seeds = [b"pool_reserve"],
+        seeds = [b"pool_reserve", pool.key().as_ref()],
         bump
     )]
     pub reserve: AccountInfo<'info>,
