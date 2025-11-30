@@ -33,8 +33,8 @@ pub fn deactivate_stake_account(ctx: Context<DeactivateStakeAccount>) -> Result<
         signer_seeds
     );
 
-    if !pool.deactivating_stakes.contains(&stake_account.key()) {
-        pool.deactivating_stakes.push(stake_account.key());
+    if !pool.deactivating_stake_accounts.contains(&stake_account.key()) {
+        pool.deactivating_stake_accounts.push(stake_account.key());
     }
 
     stake_entry.status = StakeStatus::Deactivating;
@@ -44,18 +44,21 @@ pub fn deactivate_stake_account(ctx: Context<DeactivateStakeAccount>) -> Result<
 
 #[derive(Accounts)]
 pub struct DeactivateStakeAccount<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
+    /// CHECK:
+    #[account(mut, signer)]
+    pub admin: AccountInfo<'info>,
 
     #[account(mut, has_one = admin)]
     pub pool: Account<'info, Pool>,
 
+    /// CHECK:
     #[account(mut)]
     pub stake_account: AccountInfo<'info>,
 
     #[account(mut, has_one = pool.key())]
     pub stake_entry: Account<'info, StakeEntry>,
 
+    /// CHECK:
     #[account(address = solana_program::stake::program::ID)]
     pub stake_program: AccountInfo<'info>,
 

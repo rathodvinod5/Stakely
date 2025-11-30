@@ -34,7 +34,7 @@ pub fn withdraw_stake(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
         _ => return Err(error!(CustomErrors::InvalidStakeState)),
     }
 
-    require!(pool.deactivating_stakes.contains(&stake_account.key()), CustomErrors::InvalidStakeAccount);
+    require!(pool.deactivating_stake_accounts.contains(&stake_account.key()), CustomErrors::InvalidStakeAccount);
     require!(stake_entry.status == StakeStatus::Deactivating, CustomErrors::StakeNotYetDeactivated);
 
     let withdraw_ix = withdraw( //solana_program::stake::instruction::withdraw
@@ -60,7 +60,7 @@ pub fn withdraw_stake(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
         signer_seeds
     );
 
-    pool.deactivating_stakes.retain(|pub_key| pub_key != &stake_account.key());
+    pool.deactivating_stake_accounts.retain(|pub_key| pub_key != &stake_account.key());
 
     stake_entry.status = StakeStatus::Deactive;
 

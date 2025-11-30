@@ -22,8 +22,8 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
 
     let actual_stake_amount = stake_account.lamports();
 
-    // require!(stake_account.owner == &Pubkey::from(solana_program::stake::program::ID), CustomErrors::NotTheOwner);
-    require!(stake_account.owner == &Pubkey::from(crate::program::Stakely::id()), CustomErrors::NotTheOwner);
+    require!(stake_account.owner == &Pubkey::from(solana_program::stake::program::ID), CustomErrors::NotTheOwner);
+    // require!(stake_account.owner == &Pubkey::from(crate::program::Stakely::id()), CustomErrors::NotTheOwner);
 
 
     let rent_exempt = Rent::get()?.minimum_balance(std::mem::size_of::<stake::state::StakeStateV2>());
@@ -124,10 +124,10 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
     let accounts = MintTo { 
         mint: ctx.accounts.lst_mint.to_account_info(),
         to: ctx.accounts.user_token_ata.to_account_info(),
-        authority: ctx.accounts.pool_signer.to_account_info(),
+        authority: pool.to_account_info(),
     };
     let token_program = ctx.accounts.token_program.to_account_info();
-    let seeds = &[b"pool".as_ref(), &[pool.bump]];
+    let seeds = &[b"pool".as_ref(), pool.lst_mint.as_ref(), &[pool.bump]];
     let signer_seeds = &[&seeds[..]];
     let mint_context = CpiContext::new_with_signer(token_program, accounts, signer_seeds);
 
@@ -195,11 +195,11 @@ pub struct DepositAndDelegate<'info> {
     pub user_token_ata: Account<'info, TokenAccount>,
 
     /// CHECK: This is the pool signer PDA
-    #[account(
-        seeds = [b"pool", lst_mint.key().as_ref()],
-        bump = pool.bump
-    )]
-    pub pool_signer: AccountInfo<'info>,
+    // #[account(
+    //     seeds = [b"pool", lst_mint.key().as_ref()],
+    //     bump = pool.bump
+    // )]
+    // pub pool_signer: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,

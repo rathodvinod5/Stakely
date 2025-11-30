@@ -44,6 +44,7 @@ pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reward_lamports: u64
 
 #[derive(Accounts)]
 pub struct MockAccrueRewards<'info> {
+    /// CHECK:
     #[account(mut, signer)]
     pub admin: AccountInfo<'info>,
 

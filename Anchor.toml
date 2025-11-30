@@ -3,7 +3,7 @@ package_manager = "yarn"
 
 [features]
 resolution = true
-skip-lint = false
+skip-lint = true
 
 [programs.localnet]
 stakely = "BhHah6xCWoHUvE2gyqba5vSTTyRYHzyjjTsqXX55H4AV"

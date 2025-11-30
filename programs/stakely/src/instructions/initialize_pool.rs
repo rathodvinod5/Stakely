@@ -23,6 +23,7 @@ pub fn initialize_pool(ctx: Context<InitializePool>, lst_decimals: u8) -> Result
     pool.staked_count = 0;
     pool.unstaked_count = 0;
     pool.bump = ctx.bumps.pool;
+    pool.deactivating_stake_accounts = Vec::new();
 
     Ok(())
 }
@@ -43,7 +44,6 @@ pub struct InitializePool<'info> {
         init,
         payer = admin,
         space = 8 + Pool::INIT_SPACE,
-        // seeds = [b"pool", admin.key().as_ref(), lst_mint.key().as_ref()],
         seeds = [b"pool", lst_mint.key().as_ref()],
         bump
     )]
@@ -70,3 +70,11 @@ pub struct InitializePool<'info> {
     // pub system_program: Program<'info, System>,
     // pub rent: Sysvar<'info, Rent>,
 }
+
+
+// step1)  create token
+//      - spl-token create-token
+// step 2) set mint authority
+//      - spl-token authorize <LST_MINT_PUBKEY> mint <POOL_PDA_PUBKEY>
+// step 3) set freeze authority (optional but recommended)
+//      - spl-token authorize <LST_MINT_PUBKEY> freeze <POOL_PDA_PUBKEY>
