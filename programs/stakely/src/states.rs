@@ -13,7 +13,7 @@ pub struct Pool {
     pub unstaked_count: u64,
     pub lst_decimals: u8,
     #[max_len(1024)]
-    pub deactivating_stakes: Vec<Pubkey>,
+    pub deactivating_stake_accounts: Vec<Pubkey>,
 }
 
 
