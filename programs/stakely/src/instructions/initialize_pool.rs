@@ -78,3 +78,21 @@ pub struct InitializePool<'info> {
 //      - spl-token authorize <LST_MINT_PUBKEY> mint <POOL_PDA_PUBKEY>
 // step 3) set freeze authority (optional but recommended)
 //      - spl-token authorize <LST_MINT_PUBKEY> freeze <POOL_PDA_PUBKEY>
+
+
+// // Query all the pool accounts
+// import { utils } from "@coral-xyz/anchor";
+// // get discriminator of the Pool account
+// const discriminator = utils.sha256.digest("account:Pool").slice(0, 8);
+
+// const pools = await connection.getProgramAccounts(PROGRAM_ID, {
+//   filters: [
+//     {
+//       memcmp: {
+//         offset: 0,
+//         bytes: Buffer.from(discriminator).toString("hex"),
+//       }
+//     }
+//   ]
+// });
+

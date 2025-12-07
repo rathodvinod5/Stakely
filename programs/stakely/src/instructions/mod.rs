@@ -18,3 +18,6 @@ pub mod deactivate_stake;
 
 pub use withdraw_stake::*;
 pub mod withdraw_stake;
+
+pub use delete_pool_account::*;
+pub mod delete_pool_account;
