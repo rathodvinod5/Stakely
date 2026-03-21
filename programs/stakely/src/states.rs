@@ -4,9 +4,8 @@ use anchor_lang::prelude::*;
 #[derive(InitSpace)]
 pub struct Pool {
     pub admin: Pubkey,
-    pub reserve: Pubkey,
+    pub reserve_account: Pubkey,
     pub lst_mint: Pubkey,
-    pub bump: u8,
     pub total_staked: u128,
     pub total_lst_minted: u128,
     pub staked_count: u64,
@@ -14,6 +13,8 @@ pub struct Pool {
     pub lst_decimals: u8,
     #[max_len(1024)]
     pub deactivating_stake_accounts: Vec<Pubkey>,
+    pub bump: u8,
+    pub reserve_bump: u8,
 }
 
 
@@ -22,8 +23,8 @@ pub struct Pool {
 pub struct UnstakeTicket {
     pub pool: Pubkey,
     pub requester: Pubkey,
-    pub requested_lamports: u128,
-    pub released: bool,
+    pub requested_amount: u128,
+    pub is_released: bool,
     pub index: u64,
 }
 
@@ -42,7 +43,7 @@ pub struct StakeEntry {
     pub stake_account: Pubkey,
     pub validator_voter: Pubkey,
     pub deposited_lamports: u128,
-    pub status: StakeStatus,
+    pub stake_status: StakeStatus,
     pub index: u64,
 }
 

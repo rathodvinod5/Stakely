@@ -35,7 +35,7 @@ pub fn withdraw_stake(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
     }
 
     require!(pool.deactivating_stake_accounts.contains(&stake_account.key()), CustomErrors::InvalidStakeAccount);
-    require!(stake_entry.status == StakeStatus::Deactivating, CustomErrors::StakeNotYetDeactivated);
+    require!(stake_entry.stake_status == StakeStatus::Deactivating, CustomErrors::StakeNotYetDeactivated);
 
     let withdraw_ix = withdraw( //solana_program::stake::instruction::withdraw
         &stake_account.key(), 
@@ -62,7 +62,7 @@ pub fn withdraw_stake(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
 
     pool.deactivating_stake_accounts.retain(|pub_key| pub_key != &stake_account.key());
 
-    stake_entry.status = StakeStatus::Deactive;
+    stake_entry.stake_status = StakeStatus::Deactive;
 
     Ok(())
 }
@@ -75,7 +75,7 @@ pub struct WithdrawStakeAmount<'info> {
     #[account(mut, has_one = admin)]
     pub pool: Account<'info, Pool>,
 
-    #[account(mut, address = pool.reserve)]
+    #[account(mut, address = pool.reserve_account)]
     pub reserve: AccountInfo<'info>,
 
     #[account(mut)]
