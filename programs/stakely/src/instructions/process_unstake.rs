@@ -16,7 +16,7 @@ pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
     require!(!unstake_ticket.released, CustomErrors::FundAlreadyReleased);
 
     // let reserve_lamports = ctx.accounts.reserve.get_lamports();
-    let reserve_lamports = **ctx.accounts.reserve.to_account_info().lamports.borrow();
+    let reserve_lamports = **ctx.accounts.reserve_account.to_account_info().lamports.borrow();
     // let requested_lamports = unstake_ticket.requested_lamports
     //     .try_into()
     //     .map_err(|_| error!(CustomErrors::MathOverflow))?;
@@ -33,14 +33,14 @@ pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
     let system_program = &ctx.accounts.system_program;
 
     let instructions = transfer(
-        &ctx.accounts.reserve.key(), 
+        &ctx.accounts.reserve_account.key(), 
         &unstake_ticket.requester.key(), 
         requested_lamports
     );
     let _ = invoke_signed(
         &instructions, 
         &[
-            ctx.accounts.reserve.to_account_info(),
+            ctx.accounts.reserve_account.to_account_info(),
             ctx.accounts.requester.to_account_info(),
             system_program.to_account_info()
         ], 
@@ -57,7 +57,7 @@ pub struct ProcessUnstake<'info> {
     #[account(mut)]
     pub requester: AccountInfo<'info>,
 
-    #[account(mut, has_one = reserve)]
+    #[account(mut, has_one = reserve_account)]
     pub pool: Account<'info, Pool>,
 
     // #[account(mut)]
@@ -68,7 +68,7 @@ pub struct ProcessUnstake<'info> {
         seeds = [b"pool_reserve", pool.key().as_ref()],
         bump
     )]
-    pub reserve: AccountInfo<'info>,
+    pub reserve_account: AccountInfo<'info>,
 
     #[account(
         mut,

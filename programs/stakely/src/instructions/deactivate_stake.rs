@@ -37,7 +37,7 @@ pub fn deactivate_stake_account(ctx: Context<DeactivateStakeAccount>) -> Result<
         pool.deactivating_stake_accounts.push(stake_account.key());
     }
 
-    stake_entry.status = StakeStatus::Deactivating;
+    stake_entry.stake_status = StakeStatus::Deactivating;
 
     Ok(())
 }

@@ -12,34 +12,31 @@ use crate::states::Pool;
 // - Creates reserve PDA (System account) to hold liquid lamports
 pub fn initialize_pool(ctx: Context<InitializePool>, lst_decimals: u8) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
-    let decimals = ctx.accounts.lst_mint.decimals;
+    let lst_mint = &ctx.accounts.lst_mint;
 
     pool.admin = ctx.accounts.admin.key();
-    pool.lst_mint = ctx.accounts.lst_mint.key();
-    pool.reserve = ctx.accounts.reserve.key();
-    pool.lst_decimals = decimals;
+    pool.reserve_account = ctx.accounts.reserve_account.key();
+    pool.lst_decimals = lst_mint.decimals;
+    pool.lst_mint = lst_mint.key();
     pool.total_staked = 0 as u128;
     pool.total_lst_minted = 0 as u128;
     pool.staked_count = 0;
     pool.unstaked_count = 0;
     pool.bump = ctx.bumps.pool;
-    pool.deactivating_stake_accounts = Vec::new();
+    pool.reserve_bump = ctx.bumps.reserve_account;
+    // pool.deactivating_stake_accounts = Vec::new();
+    // pool.deactivating_stake_accounts = vec![]; // Vec::<Pubkey>::new();
 
+    // msg!("Changed data to: {}!", data); // Message will show up in the tx logs
     Ok(())
 }
 
 #[derive(Accounts)]
 pub struct InitializePool<'info> {
 
-    /// CHECK: This is the admin initializing the pool
     #[account(mut, signer)]
-    pub admin: AccountInfo<'info>,
+    pub admin: UncheckedAccount<'info>,
 
-    /// CHECK: This is the LST mint account
-    #[account(mut)]
-    pub lst_mint: Account<'info, Mint>,
-
-    /// CHECK: This is the pool account
     #[account(
         init,
         payer = admin,
@@ -49,26 +46,21 @@ pub struct InitializePool<'info> {
     )]
     pub pool: Account<'info, Pool>,
 
-    /// CHECK: This is a PDA vault account used only to hold SOL. No data is accessed.
     #[account(
         init,
         payer = admin,
         space = 8,
-        seeds = [b"pool_reserve", pool.key().as_ref()],
+        seeds = [b"pool-reserve", pool.key().as_ref()],
         bump
     )]
-    pub reserve: UncheckedAccount<'info>,
+    // pub reserve_account: SystemAccount<'info>,
+    pub reserve_account: UncheckedAccount<'info>,
+    // pub reserve_account: Account<'info, ReserveAccount>,
+    #[account(mut)]
+    pub lst_mint: Account<'info, Mint>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
-    pub rent: Sysvar<'info, Rent>,
-
-    // pub token_account: InterfaceAccount<'info, TokenAccount>,
-    // pub lst_mint: InterfaceAccount<'info, Mint>,
-    // pub token_program: Interface<'info, TokenInterface>,
-    // // pub associated_token_program: Program<'info, AssociatedToken>,
-    // pub system_program: Program<'info, System>,
-    // pub rent: Sysvar<'info, Rent>,
 }
 
 

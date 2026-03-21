@@ -14,7 +14,7 @@ use crate::states::{ Pool };
 // - Then calls this instruction with amount to account for those lamports as "rewards" (adds to total_staked)
 pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reward_lamports: u64) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
-    let reserve = &ctx.accounts.reserve;
+    let reserve_account = &ctx.accounts.reserve_account;
 
     // let reserve_lamports = reserve.lamports();
     // require!(reserve_lamports >= reward_lamports, CustomErrors::InsufficientBalance);
@@ -22,7 +22,7 @@ pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reward_lamports: u64
 
     let transfer_instr = transfer(
         &ctx.accounts.admin.key(), 
-        &reserve.key(), 
+        &reserve_account.key(), 
         reward_lamports
     );
     let system_program = &ctx.accounts.system_program;
@@ -30,7 +30,7 @@ pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reward_lamports: u64
         &transfer_instr, 
         &[
             ctx.accounts.admin.to_account_info(),
-            reserve.to_account_info(),
+            reserve_account.to_account_info(),
             system_program.to_account_info()
         ]
     );
@@ -48,11 +48,11 @@ pub struct MockAccrueRewards<'info> {
     #[account(mut, signer)]
     pub admin: AccountInfo<'info>,
 
-    #[account(mut, has_one = reserve)]
+    #[account(mut, has_one = reserve_account)]
     pub pool: Account<'info, Pool>,
 
     #[account(mut, seeds = [b"pool_reserve"], bump)]
-    pub reserve: AccountInfo<'info>,
+    pub reserve_account: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>
 }

@@ -13,7 +13,7 @@ pub fn request_unstake(ctx: Context<RequestUnstake>, unstake_token_lst_amount: u
     require!(user_token_lst_balance >= unstake_token_lst_amount, CustomErrors::InsufficientStakeAmount);
 
     // Check user stake (optional but safer)
-    require!(ctx.accounts.stake_entry.status == StakeStatus::Active, CustomErrors::NoActiveStake);
+    require!(ctx.accounts.stake_entry.stake_status == StakeStatus::Active, CustomErrors::NoActiveStake);
 
     require!(pool.total_lst_minted > 0, CustomErrors::EmptyPool);
     require!(pool.total_lst_minted >= user_token_lst_balance as u128, CustomErrors::InsufficientTokensRecord);
