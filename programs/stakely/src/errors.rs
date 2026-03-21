@@ -2,14 +2,12 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum CustomErrors {
-    #[msg("Math Overflow")]
+   #[msg("Math Overflow")]
     MathOverflow,
     #[msg("Not the owner")]
     NotTheOwner,
     #[msg("Insufficient balance")]
     InsufficientBalance,
-    #[msg("Insufficient token record")]
-    InsufficientTokensRecord,
     #[msg("Reserve out of balance")]
     ReserveOutOfBalance,
     #[msg("Insufficient user token balance")]
@@ -29,5 +27,11 @@ pub enum CustomErrors {
     #[msg("Stake account not deactivated!")]
     StakeNotYetDeactivated,
     #[msg("Invalid stake state")]
-    InvalidStakeState
+    InvalidStakeState,
+    #[msg("Unstake amount should be greater then 0")]
+    InvalidUnstakeAmount,
+    #[msg("No active stake entry")]
+    NoActiveStakes,
+    #[msg("Invalid stake amount")]
+    InvalidStakeAmount,
 }

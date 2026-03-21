@@ -12,47 +12,49 @@ use crate::states::{ Pool };
 // Admin/keeper: mock_accrue_rewards
 // - The admin first transfers lamports to the pool reserve (off-chain client does SystemProgram::transfer to PDA)
 // - Then calls this instruction with amount to account for those lamports as "rewards" (adds to total_staked)
-pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reward_lamports: u64) -> Result<()> {
+pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reward_amount: u64) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
+    let admin = &ctx.accounts.admin;
     let reserve_account = &ctx.accounts.reserve_account;
 
-    // let reserve_lamports = reserve.lamports();
-    // require!(reserve_lamports >= reward_lamports, CustomErrors::InsufficientBalance);
-    require!(pool.admin == ctx.accounts.admin.key(), CustomErrors::NotTheOwner);
-
-    let transfer_instr = transfer(
-        &ctx.accounts.admin.key(), 
-        &reserve_account.key(), 
-        reward_lamports
+    let reserve_lamports = reserve_account.to_account_info().lamports();
+    require!(
+        reserve_lamports >= reward_amount,
+        CustomErrors::InsufficientBalance
     );
-    let system_program = &ctx.accounts.system_program;
-    let _ = invoke(
-        &transfer_instr, 
-        &[
-            ctx.accounts.admin.to_account_info(),
-            reserve_account.to_account_info(),
-            system_program.to_account_info()
-        ]
-    );
+    require_keys_eq!(pool.admin.key(), admin.key(), CustomErrors::NotTheOwner);
 
-    pool.total_staked = pool.total_staked
-        .checked_add(reward_lamports as u128)
-        .ok_or(CustomErrors::MathOverflow)?;
+    let instruction = transfer(&admin.key(), &reserve_account.key(), reward_amount);
+    let account_infos = &[
+        admin.to_account_info(),
+        reserve_account.to_account_info(),
+        ctx.accounts.system_program.to_account_info(),
+    ];
+
+    let _ = invoke(&instruction, account_infos);
+
+    pool.total_staked = pool.total_staked.checked_add(reward_amount.into()).unwrap();
 
     Ok(())
 }
 
 #[derive(Accounts)]
 pub struct MockAccrueRewards<'info> {
-    /// CHECK:
     #[account(mut, signer)]
     pub admin: AccountInfo<'info>,
 
-    #[account(mut, has_one = reserve_account)]
+    #[account(
+        mut,
+        has_one = reserve_account,
+    )]
     pub pool: Account<'info, Pool>,
 
-    #[account(mut, seeds = [b"pool_reserve"], bump)]
+    #[account(
+        mut,
+        seeds = [b"pool-reserve", pool.key().as_ref()],
+        bump
+    )]
     pub reserve_account: AccountInfo<'info>,
 
-    pub system_program: Program<'info, System>
+    pub system_program: Program<'info, System>,
 }

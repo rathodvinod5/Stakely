@@ -23,8 +23,8 @@ pub struct Pool {
 pub struct UnstakeTicket {
     pub pool: Pubkey,
     pub requester: Pubkey,
-    pub requested_lamports: u128,
-    pub released: bool,
+    pub requested_amount: u128,
+    pub is_released: bool,
     pub index: u64,
 }
 
