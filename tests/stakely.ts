@@ -53,7 +53,7 @@ describe("stakely", () => {
   let unstakeTicket1Pda: PublicKey;
   let unstakeTicket2Pda: PublicKey;
 
-  // ── fakeStakeAccount  ────────────────────────────────────
+  // ── fake StakeAccount  ────────────────────────────────────
   // not owned by stake program
   let fakeStakeAccount: anchor.web3.Keypair;
   let fakeStakeEntryPda: PublicKey;
