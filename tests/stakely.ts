@@ -835,7 +835,7 @@ describe("stakely", () => {
     });
   });
 
-  describe.skip(" TO DEPOSIT STAKE TO POOL", () => {
+  describe.skip("DEPOSIT STAKE TO POOL", () => {
     describe("Create user ATA for user1 and user1", () => {});
 
     describe("Deposit and delegate to pool", () => {});
