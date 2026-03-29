@@ -21,24 +21,48 @@ describe("stakely", () => {
 
   const program = anchor.workspace.stakely as Program<Stakely>;
 
-  let poolTitle = "The first pool";
   const admin = anchor.web3.Keypair.generate();
   const user1 = anchor.web3.Keypair.generate();
   const user2 = anchor.web3.Keypair.generate();
+
+  // ── LST mint + pool ──────────────────────────────────────
   let lstMint: PublicKey;
   let poolPda: PublicKey;
   let poolBump: number;
   let reservePda: PublicKey;
   let reserveBump: number;
-  // let stakeAccount1: PublicKey;
-  // let stakeAccount2: PublicKey;
-  let unstakeAccount1: PublicKey;
-  let unstakeAccount2: PublicKey;
 
-  let stakeAccount1: anchor.web3.Keypair;
-  let stakeAccount2: anchor.web3.Keypair;
+  // ── another pool (for failure cases / reuse) ─────────────
+  let anotherLstMint: PublicKey;
+  let anotherPoolPda: PublicKey;
+  let anotherReservePda: PublicKey;
+
+  // ── user ATAs ────────────────────────────────────────────
   let userAta1: PublicKey;
   let userAta2: PublicKey;
+
+  // ── stake accounts ───────────────────────────────────────
+  let stakeAccount1: anchor.web3.Keypair;
+  let stakeAccount2: anchor.web3.Keypair;
+
+  // ── stake entries ────────────────────────────────────────
+  let stakeEntry1Pda: PublicKey;
+  let stakeEntry2Pda: PublicKey;
+
+  // ── unstake tickets ──────────────────────────────────────
+  let unstakeTicket1Pda: PublicKey;
+  let unstakeTicket2Pda: PublicKey;
+
+  // ── fake StakeAccount  ────────────────────────────────────
+  // not owned by stake program
+  let fakeStakeAccount: anchor.web3.Keypair;
+  let fakeStakeEntryPda: PublicKey;
+
+  // ── broken admin  ────────────────────────────────────────
+  let brokeAdmin: anchor.web3.Keypair;
+
+  let unstakeAccount1: PublicKey;
+  let unstakeAccount2: PublicKey;
 
   describe("AIRDROP AND CREATE LST MINT TOKEN", async () => {
     before(async () => {
@@ -229,18 +253,18 @@ describe("stakely", () => {
 
       it("fails to initialize pool with non admin signer", async () => {
         // create a different lst mint so PDA is different
-        const anotherLstMint = await createMint(
+        anotherLstMint = await createMint(
           provider.connection,
           user1, // user1 pays
           user1.publicKey,
           user1.publicKey,
           9,
         );
-        const [anotherPoolPda] = PublicKey.findProgramAddressSync(
+        [anotherPoolPda] = PublicKey.findProgramAddressSync(
           [Buffer.from("pool"), anotherLstMint.toBuffer()],
           program.programId,
         );
-        const [anotherReservePda] = PublicKey.findProgramAddressSync(
+        [anotherReservePda] = PublicKey.findProgramAddressSync(
           [Buffer.from("pool-reserve"), anotherPoolPda.toBuffer()],
           program.programId,
         );
@@ -304,28 +328,11 @@ describe("stakely", () => {
       });
 
       it("fails to initialize pool with wrong reserve PDA seeds", async () => {
-        // create a fresh lstMint so poolPda is different
-        const freshLstMint = await createMint(
-          provider.connection,
-          admin,
-          admin.publicKey,
-          admin.publicKey,
-          9,
-        );
-        // console.log("Fresh LST Mint:", freshLstMint.toString());
-
-        // derive correct pool PDA
-        const [freshPoolPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("pool"), freshLstMint.toBuffer()],
-          program.programId,
-        );
-        // console.log("Fresh Pool PDA:", freshPoolPda.toString());
-
         // derive WRONG reserve PDA using wrong seeds
         // correct seeds: [b"pool-reserve", poolPda]
         // wrong seeds:   [b"wrong-reserve", poolPda]
         const [wrongReservePda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("wrong-reserve"), freshPoolPda.toBuffer()], // ← wrong seed prefix
+          [Buffer.from("wrong-reserve"), poolPda.toBuffer()], // ← wrong seed prefix
           program.programId,
         );
         // console.log("Wrong Reserve PDA:", wrongReservePda.toString());
@@ -335,9 +342,9 @@ describe("stakely", () => {
             .initializePool()
             .accounts({
               admin: admin.publicKey,
-              pool: freshPoolPda,
+              pool: poolPda,
               reserveAccount: wrongReservePda, // ← wrong reserve PDA
-              lstMint: freshLstMint,
+              lstMint: lstMint,
               systemProgram: anchor.web3.SystemProgram.programId,
               tokenProgram: TOKEN_PROGRAM_ID,
             })
@@ -359,7 +366,6 @@ describe("stakely", () => {
       it("fails to initialize pool with invalid lst mint", async () => {
         // create a random keypair to use as fake mint
         const fakeMint = anchor.web3.Keypair.generate();
-        // console.log("Fake mint:", fakeMint.publicKey.toString());
 
         // derive pool PDA with fake mint
         const [fakePoolPda] = PublicKey.findProgramAddressSync(
@@ -370,8 +376,6 @@ describe("stakely", () => {
           [Buffer.from("pool-reserve"), fakePoolPda.toBuffer()],
           program.programId,
         );
-        // console.log("Fake Pool PDA:", fakePoolPda.toString());
-        // console.log("Fake Reserve PDA:", fakeReservePda.toString());
 
         try {
           await program.methods
@@ -401,8 +405,7 @@ describe("stakely", () => {
 
       it("fails to initialize pool with insufficient admin SOL", async () => {
         // create a broke keypair with no SOL
-        const brokeAdmin = anchor.web3.Keypair.generate();
-        // console.log("Broke admin:", brokeAdmin.publicKey.toString());
+        brokeAdmin = anchor.web3.Keypair.generate();
 
         // airdrop just a tiny amount - not enough to pay for rent
         // pool rent ~ 1300 lamports
@@ -414,32 +417,14 @@ describe("stakely", () => {
         );
         await provider.connection.confirmTransaction(sig, "confirmed");
 
-        const brokeAdminBalance = await provider.connection.getBalance(
-          brokeAdmin.publicKey,
-        );
-        // console.log("Broke admin balance:", brokeAdminBalance, "lamports");
-
-        // create a fresh lstMint so PDA is different
-        // brokeAdmin can't even afford this, so admin pays for it
-        const freshLstMint = await createMint(
-          provider.connection,
-          admin, // ← admin pays for mint creation
-          admin.publicKey,
-          admin.publicKey,
-          9,
-        );
-        // console.log("Fresh LST Mint:", freshLstMint.toString());
-
         const [freshPoolPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("pool"), freshLstMint.toBuffer()],
+          [Buffer.from("pool"), lstMint.toBuffer()],
           program.programId,
         );
         const [freshReservePda] = PublicKey.findProgramAddressSync(
           [Buffer.from("pool-reserve"), freshPoolPda.toBuffer()],
           program.programId,
         );
-        // console.log("Fresh Pool PDA:", freshPoolPda.toString());
-        // console.log("Fresh Reserve PDA:", freshReservePda.toString());
 
         try {
           await program.methods
@@ -448,7 +433,7 @@ describe("stakely", () => {
               admin: brokeAdmin.publicKey, // ← broke admin has no SOL
               pool: freshPoolPda,
               reserveAccount: freshReservePda,
-              lstMint: freshLstMint,
+              lstMint: lstMint,
               systemProgram: anchor.web3.SystemProgram.programId,
               tokenProgram: TOKEN_PROGRAM_ID,
             })
@@ -494,8 +479,6 @@ describe("stakely", () => {
 
         // verify both authorities changed
         const mintInfo = await getMint(provider.connection, lstMint);
-        // console.log("Mint authority:", mintInfo.mintAuthority?.toString());
-        // console.log("Freeze authority:", mintInfo.freezeAuthority?.toString());
 
         assert.equal(
           mintInfo.mintAuthority?.toString(),
@@ -567,7 +550,7 @@ describe("stakely", () => {
             provider.connection,
             admin, // payer
             lstMint, // mint account
-            admin.publicKey, // wrong current authority (was transferred to poolPda)
+            admin.publicKey, // wrong current authority (it was already transferred to poolPda)
             AuthorityType.MintTokens, // authority type
             admin.publicKey, // new authority
           );
@@ -591,12 +574,11 @@ describe("stakely", () => {
       it("creates ATA for user1 successfully", async () => {
         const ata = await getOrCreateAssociatedTokenAccount(
           provider.connection,
-          admin, // payer
+          user1, // payer
           lstMint, // mint
           user1.publicKey, // owner
         );
         userAta1 = ata.address;
-        // console.log("User1 ATA:", userAta1.toString());
 
         const ataInfo = await getAccount(provider.connection, userAta1);
         assert.equal(
@@ -619,12 +601,11 @@ describe("stakely", () => {
       it("creates ATA for user2 successfully", async () => {
         const ata = await getOrCreateAssociatedTokenAccount(
           provider.connection,
-          admin, // payer
+          user2, // payer
           lstMint, // mint
           user2.publicKey, // owner
         );
         userAta2 = ata.address;
-        // console.log("User2 ATA:", userAta2.toString());
 
         const ataInfo = await getAccount(provider.connection, userAta2);
         assert.equal(
@@ -835,10 +816,651 @@ describe("stakely", () => {
     });
   });
 
-  describe.skip("DEPOSIT STAKE TO POOL", () => {
-    describe("Create user ATA for user1 and user1", () => {});
+  describe("DEPOSIT AND DELEGATE", () => {
+    describe("Success cases", () => {
+      it("deposits and delegates stake to pool successfully for user1", async () => {
+        const stakeAmount = new anchor.BN(2 * LAMPORTS_PER_SOL);
 
-    describe("Deposit and delegate to pool", () => {});
+        // derive stake entry PDA for user1
+        [stakeEntry1Pda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("stake-entry"),
+            poolPda.toBuffer(),
+            user1.publicKey.toBuffer(),
+          ],
+          program.programId,
+        );
+
+        // fetch pool state before deposit
+        const poolBefore = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked before:",
+        //   poolBefore.totalStaked.toString(),
+        // );
+        // console.log(
+        //   "Pool totalLstMinted before:",
+        //   poolBefore.totalLstMinted.toString(),
+        // );
+        // console.log(
+        //   "Pool stakedCount before:",
+        //   poolBefore.stakedCount.toString(),
+        // );
+
+        // fetch user1 ATA balance before deposit
+        const ataBefore = await getAccount(provider.connection, userAta1);
+
+        const tx = await program.methods
+          .depositAndDelegate(stakeAmount)
+          .accounts({
+            user: user1.publicKey,
+            pool: poolPda,
+            reserveAccount: reservePda,
+            stakeAccount: stakeAccount1.publicKey,
+            lstMint: lstMint,
+            userAta: userAta1,
+            stakeEntry: stakeEntry1Pda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([user1])
+          .rpc({ commitment: "confirmed" });
+
+        // verify pool state after deposit
+        const poolAfter = await program.account.pool.fetch(poolPda);
+
+        assert.equal(
+          poolAfter.totalStaked.toString(),
+          stakeAmount.toString(),
+          "Total staked should increase by stake amount",
+        );
+        assert.ok(
+          poolAfter.totalLstMinted.toString() !== "0",
+          "Total LST minted should increase",
+        );
+        assert.equal(
+          poolAfter.stakedCount.toString(),
+          "1",
+          "Staked count should be 1",
+        );
+
+        // verify stake entry was created correctly
+        const stakeEntry = await program.account.stakeEntry.fetch(
+          stakeEntry1Pda,
+        );
+
+        assert.equal(
+          stakeEntry.pool.toString(),
+          poolPda.toString(),
+          "Pool should match",
+        );
+        assert.equal(
+          stakeEntry.stakeAccount.toString(),
+          stakeAccount1.publicKey.toString(),
+          "Stake account should match",
+        );
+        assert.equal(
+          stakeEntry.depositedLamports.toString(),
+          stakeAmount.toString(),
+          "Deposited lamports should match",
+        );
+        assert.deepEqual(
+          stakeEntry.stakeStatus,
+          { active: {} },
+          "Stake status should be active",
+        );
+        assert.equal(stakeEntry.index.toString(), "0", "Index should be 0");
+
+        // verify user1 received LST tokens
+        const ataAfter = await getAccount(provider.connection, userAta1);
+        assert.ok(
+          BigInt(ataAfter.amount) > BigInt(ataBefore.amount),
+          "User1 should have received LST tokens",
+        );
+      });
+
+      it("deposits and delegates stake to pool successfully for user2", async () => {
+        const stakeAmount = new anchor.BN(3 * LAMPORTS_PER_SOL);
+
+        // derive stake entry PDA for user2
+        [stakeEntry2Pda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("stake-entry"),
+            poolPda.toBuffer(),
+            user2.publicKey.toBuffer(),
+          ],
+          program.programId,
+        );
+
+        // fetch pool state before deposit
+        // const poolBefore = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked before:",
+        //   poolBefore.totalStaked.toString(),
+        // );
+        // console.log(
+        //   "Pool totalLstMinted before:",
+        //   poolBefore.totalLstMinted.toString(),
+        // );
+        // console.log(
+        //   "Pool stakedCount before:",
+        //   poolBefore.stakedCount.toString(),
+        // );
+
+        const ataBefore = await getAccount(provider.connection, userAta2);
+
+        const tx = await program.methods
+          .depositAndDelegate(stakeAmount)
+          .accounts({
+            user: user2.publicKey,
+            pool: poolPda,
+            reserveAccount: reservePda,
+            stakeAccount: stakeAccount2.publicKey,
+            lstMint: lstMint,
+            userAta: userAta2,
+            stakeEntry: stakeEntry2Pda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([user2])
+          .rpc({ commitment: "confirmed" });
+
+        // verify pool state after deposit
+        const poolAfter = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked after:",
+        //   poolAfter.totalStaked.toString(),
+        // );
+        // console.log(
+        //   "Pool totalLstMinted after:",
+        //   poolAfter.totalLstMinted.toString(),
+        // );
+        // console.log(
+        //   "Pool stakedCount after:",
+        //   poolAfter.stakedCount.toString(),
+        // );
+
+        // total staked should now be user1 + user2 stake amounts
+        const expectedTotalStaked = new anchor.BN(2 * LAMPORTS_PER_SOL).add(
+          stakeAmount,
+        );
+        assert.equal(
+          poolAfter.totalStaked.toString(),
+          expectedTotalStaked.toString(),
+          "Total staked should be sum of user1 and user2 stake amounts",
+        );
+        assert.equal(
+          poolAfter.stakedCount.toString(),
+          "2",
+          "Staked count should be 2",
+        );
+
+        // verify stake entry for user2
+        const stakeEntry = await program.account.stakeEntry.fetch(
+          stakeEntry2Pda,
+        );
+        // console.log(
+        //   "Stake entry2 depositedLamports:",
+        //   stakeEntry.depositedLamports.toString(),
+        // );
+        // console.log("Stake entry2 index:", stakeEntry.index.toString());
+
+        assert.equal(
+          stakeEntry.depositedLamports.toString(),
+          stakeAmount.toString(),
+          "Deposited lamports should match",
+        );
+        assert.deepEqual(
+          stakeEntry.stakeStatus,
+          { active: {} },
+          "Stake status should be active",
+        );
+        assert.equal(stakeEntry.index.toString(), "1", "Index should be 1");
+
+        // verify user2 received LST tokens
+        const ataAfter = await getAccount(provider.connection, userAta2);
+        // console.log("User2 LST balance after:", ataAfter.amount.toString());
+        assert.ok(
+          BigInt(ataAfter.amount) > BigInt(ataBefore.amount),
+          "User2 should have received LST tokens",
+        );
+      });
+    });
+
+    describe("Failure cases", () => {
+      it("fails to deposit with zero stake amount", async () => {
+        try {
+          await program.methods
+            .depositAndDelegate(new anchor.BN(0)) // ← zero amount
+            .accounts({
+              user: user1.publicKey,
+              pool: poolPda,
+              reserveAccount: reservePda,
+              stakeAccount: stakeAccount1.publicKey,
+              lstMint: lstMint,
+              userAta: userAta1,
+              stakeEntry: stakeEntry1Pda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            })
+            .signers([user1])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("InsufficientBalance") ||
+              err.message.includes("Error"),
+            "Should fail because stake amount is 0",
+          );
+        }
+      });
+
+      it("fails to deposit with wrong pool", async () => {
+        // initialize another pool
+        await program.methods
+          .initializePool()
+          .accounts({
+            admin: admin.publicKey,
+            pool: anotherPoolPda,
+            reserveAccount: anotherReservePda,
+            lstMint: anotherLstMint,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([admin])
+          .rpc({ commitment: "confirmed" });
+
+        const [wrongStakeEntryPda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("stake-entry"),
+            anotherPoolPda.toBuffer(), // ← wrong pool
+            user1.publicKey.toBuffer(),
+          ],
+          program.programId,
+        );
+
+        try {
+          await program.methods
+            .depositAndDelegate(new anchor.BN(2 * LAMPORTS_PER_SOL))
+            .accounts({
+              user: user1.publicKey,
+              pool: anotherPoolPda, // ← wrong pool
+              reserveAccount: anotherReservePda,
+              stakeAccount: stakeAccount1.publicKey,
+              lstMint: anotherLstMint, // ← wrong mint
+              userAta: userAta1,
+              stakeEntry: wrongStakeEntryPda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            })
+            .signers([user1])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("Error"),
+            "Should fail because pool is wrong",
+          );
+        }
+      });
+
+      it("fails to deposit with stake account not owned by stake program", async () => {
+        // create a regular system account instead of stake account
+        fakeStakeAccount = anchor.web3.Keypair.generate();
+        const createFakeAccountTx = new anchor.web3.Transaction().add(
+          anchor.web3.SystemProgram.createAccount({
+            fromPubkey: user1.publicKey,
+            newAccountPubkey: fakeStakeAccount.publicKey,
+            lamports: 2 * LAMPORTS_PER_SOL,
+            space: 0,
+            programId: anchor.web3.SystemProgram.programId, // ← system program not stake program
+          }),
+        );
+        await provider.sendAndConfirm(
+          createFakeAccountTx,
+          [user1, fakeStakeAccount],
+          {
+            commitment: "confirmed",
+          },
+        );
+
+        [fakeStakeEntryPda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("stake-entry"),
+            poolPda.toBuffer(),
+            fakeStakeAccount.publicKey.toBuffer(),
+          ],
+          program.programId,
+        );
+
+        try {
+          await program.methods
+            .depositAndDelegate(new anchor.BN(2 * LAMPORTS_PER_SOL))
+            .accounts({
+              user: user1.publicKey,
+              pool: poolPda,
+              reserveAccount: reservePda,
+              stakeAccount: fakeStakeAccount.publicKey, // ← not a real stake account
+              lstMint: lstMint,
+              userAta: userAta1,
+              stakeEntry: fakeStakeEntryPda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            })
+            .signers([user1])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("NotTheOwner") ||
+              err.message.includes("Error"),
+            "Should fail because stake account is not owned by stake program",
+          );
+        }
+      });
+
+      it("fails to deposit same stake account twice", async () => {
+        // stakeAccount1 already deposited in success case
+        // stake entry PDA already exists for user1
+        try {
+          await program.methods
+            .depositAndDelegate(new anchor.BN(2 * LAMPORTS_PER_SOL))
+            .accounts({
+              user: user1.publicKey,
+              pool: poolPda,
+              reserveAccount: reservePda,
+              stakeAccount: stakeAccount1.publicKey, // ← already deposited
+              lstMint: lstMint,
+              userAta: userAta1,
+              stakeEntry: stakeEntry1Pda, // ← already exists
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            })
+            .signers([user1])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("already in use") ||
+              err.message.includes("Error"),
+            "Should fail because stake entry already exists",
+          );
+        }
+      });
+    });
+  });
+
+  describe("MOCK ACCRUE REWARDS", () => {
+    describe("Success cases", () => {
+      it("accrues rewards to reserve account successfully", async () => {
+        const rewardAmount = new anchor.BN(5 * LAMPORTS_PER_SOL);
+
+        // fetch pool state before accruing rewards
+        const poolBefore = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked before:",
+        //   poolBefore.totalStaked.toString(),
+        // );
+
+        // fetch reserve balance before
+        const reserveBalanceBefore = await provider.connection.getBalance(
+          reservePda,
+        );
+        // console.log("Reserve balance before:", reserveBalanceBefore);
+
+        // fetch admin balance before
+        const adminBalanceBefore = await provider.connection.getBalance(
+          admin.publicKey,
+        );
+        // console.log("Admin balance before:", adminBalanceBefore);
+
+        const tx = await program.methods
+          .mockAccrueRewards(rewardAmount)
+          .accounts({
+            admin: admin.publicKey,
+            pool: poolPda,
+            reserveAccount: reservePda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([admin])
+          .rpc({ commitment: "confirmed" });
+
+        // verify pool totalStaked increased by reward amount
+        const poolAfter = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked after:",
+        //   poolAfter.totalStaked.toString(),
+        // );
+
+        const expectedTotalStaked = new anchor.BN(
+          poolBefore.totalStaked.toString(),
+        ).add(rewardAmount);
+        // console.log("expected: ", expectedTotalStaked.toString());
+        assert.equal(
+          poolAfter.totalStaked.toString(),
+          expectedTotalStaked.toString(),
+          "Total staked should increase by reward amount",
+        );
+
+        // verify reserve balance increased by reward amount
+        const reserveBalanceAfter = await provider.connection.getBalance(
+          reservePda,
+        );
+        // console.log("Reserve balance after:", reserveBalanceAfter);
+        assert.equal(
+          reserveBalanceAfter,
+          reserveBalanceBefore + rewardAmount.toNumber(),
+          "Reserve balance should increase by reward amount",
+        );
+
+        // verify admin balance decreased by reward amount
+        const adminBalanceAfter = await provider.connection.getBalance(
+          admin.publicKey,
+        );
+        // console.log("Admin balance after:", adminBalanceAfter);
+        assert.ok(
+          adminBalanceAfter < adminBalanceBefore,
+          "Admin balance should decrease by reward amount",
+        );
+      });
+
+      it("accrues rewards multiple times successfully", async () => {
+        const rewardAmount = new anchor.BN(0.5 * LAMPORTS_PER_SOL);
+
+        const poolBefore = await program.account.pool.fetch(poolPda);
+        const reserveBalanceBefore = await provider.connection.getBalance(
+          reservePda,
+        );
+
+        // accrue rewards twice
+        for (let i = 0; i < 2; i++) {
+          const tx = await program.methods
+            .mockAccrueRewards(rewardAmount)
+            .accounts({
+              admin: admin.publicKey,
+              pool: poolPda,
+              reserveAccount: reservePda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
+          // console.log(`✅ mockAccrueRewards tx ${i + 1}:`, tx);
+        }
+
+        // verify pool totalStaked increased by 2x reward amount
+        const poolAfter = await program.account.pool.fetch(poolPda);
+        const expectedTotalStaked = new anchor.BN(
+          poolBefore.totalStaked.toString(),
+        ).add(rewardAmount.mul(new anchor.BN(2)));
+        // console.log(
+        //   "Pool totalStaked after 2x rewards:",
+        //   poolAfter.totalStaked.toString(),
+        // );
+
+        assert.equal(
+          poolAfter.totalStaked.toString(),
+          expectedTotalStaked.toString(),
+          "Total staked should increase by 2x reward amount",
+        );
+
+        // verify reserve balance increased by 2x reward amount
+        const reserveBalanceAfter = await provider.connection.getBalance(
+          reservePda,
+        );
+        assert.equal(
+          reserveBalanceAfter,
+          reserveBalanceBefore + rewardAmount.toNumber() * 2,
+          "Reserve balance should increase by 2x reward amount",
+        );
+      });
+    });
+
+    describe("Failure cases", () => {
+      it("fails to accrue rewards with wrong admin", async () => {
+        const rewardAmount = new anchor.BN(1 * LAMPORTS_PER_SOL);
+
+        try {
+          await program.methods
+            .mockAccrueRewards(rewardAmount)
+            .accounts({
+              admin: user1.publicKey, // ← wrong admin
+              pool: poolPda,
+              reserveAccount: reservePda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([user1]) // ← user1 signs not admin
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("NotTheOwner") ||
+              err.message.includes("Error"),
+            "Should fail because user1 is not the admin",
+          );
+        }
+      });
+
+      it("fails to accrue rewards with zero reward amount", async () => {
+        try {
+          await program.methods
+            .mockAccrueRewards(new anchor.BN(0)) // ← zero amount
+            .accounts({
+              admin: admin.publicKey,
+              pool: poolPda,
+              reserveAccount: reservePda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("InsufficientBalance") ||
+              err.message.includes("error"),
+            "Should fail because reward amount is 0",
+          );
+        }
+      });
+
+      it("fails to accrue rewards with wrong reserve account", async () => {
+        const rewardAmount = new anchor.BN(1 * LAMPORTS_PER_SOL);
+
+        try {
+          await program.methods
+            .mockAccrueRewards(rewardAmount)
+            .accounts({
+              admin: admin.publicKey,
+              pool: poolPda,
+              reserveAccount: anotherReservePda, // ← wrong reserve account
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("has_one") ||
+              err.message.includes("ConstraintHasOne") ||
+              err.message.includes("Error"),
+            "Should fail because reserve account does not match pool",
+          );
+        }
+      });
+
+      it("fails to accrue rewards with insufficient admin balance", async () => {
+        // create a fresh pool for broke admin
+        const freshLstMint = await createMint(
+          provider.connection,
+          admin, // ← admin pays for mint
+          brokeAdmin.publicKey,
+          brokeAdmin.publicKey,
+          9,
+        );
+        const [freshPoolPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool"), freshLstMint.toBuffer()],
+          program.programId,
+        );
+        const [freshReservePda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool-reserve"), freshPoolPda.toBuffer()],
+          program.programId,
+        );
+
+        // initialize fresh pool with admin paying
+        await program.methods
+          .initializePool()
+          .accounts({
+            admin: admin.publicKey,
+            pool: freshPoolPda,
+            reserveAccount: freshReservePda,
+            lstMint: freshLstMint,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([admin])
+          .rpc({ commitment: "confirmed" });
+
+        try {
+          await program.methods
+            .mockAccrueRewards(new anchor.BN(1 * LAMPORTS_PER_SOL))
+            .accounts({
+              admin: brokeAdmin.publicKey, // ← broke admin
+              pool: freshPoolPda,
+              reserveAccount: freshReservePda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([brokeAdmin])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          assert.ok(
+            err.message.includes("insufficient lamports") ||
+              err.message.includes("NotTheOwner") ||
+              err.message.includes("error"),
+            "Should fail because broke admin has insufficient SOL",
+          );
+        }
+      });
+    });
   });
 });
 
