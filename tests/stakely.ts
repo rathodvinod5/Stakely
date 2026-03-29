@@ -1,7 +1,13 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
-import { createMint, getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  AuthorityType,
+  createMint,
+  getMint,
+  setAuthority,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import { assert } from "chai";
 import { Stakely } from "../target/types/stakely";
 
@@ -255,7 +261,7 @@ describe("stakely", () => {
         }
       });
 
-      it("should fail if we call the initiliazePool with wrong pool seeds", async () => {
+      it("should fail if we call initiliazePool with wrong pool seeds", async () => {
         try {
           const [wrongPoolPda] = PublicKey.findProgramAddressSync(
             [Buffer.from("wrong pool"), lstMint.toBuffer()],
@@ -289,10 +295,291 @@ describe("stakely", () => {
           );
         }
       });
+
+      it("fails to initialize pool with wrong reserve PDA seeds", async () => {
+        // create a fresh lstMint so poolPda is different
+        const freshLstMint = await createMint(
+          provider.connection,
+          admin,
+          admin.publicKey,
+          admin.publicKey,
+          9,
+        );
+        // console.log("Fresh LST Mint:", freshLstMint.toString());
+
+        // derive correct pool PDA
+        const [freshPoolPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool"), freshLstMint.toBuffer()],
+          program.programId,
+        );
+        // console.log("Fresh Pool PDA:", freshPoolPda.toString());
+
+        // derive WRONG reserve PDA using wrong seeds
+        // correct seeds: [b"pool-reserve", poolPda]
+        // wrong seeds:   [b"wrong-reserve", poolPda]
+        const [wrongReservePda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("wrong-reserve"), freshPoolPda.toBuffer()], // ← wrong seed prefix
+          program.programId,
+        );
+        // console.log("Wrong Reserve PDA:", wrongReservePda.toString());
+
+        try {
+          await program.methods
+            .initializePool()
+            .accounts({
+              admin: admin.publicKey,
+              pool: freshPoolPda,
+              reserveAccount: wrongReservePda, // ← wrong reserve PDA
+              lstMint: freshLstMint,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("seeds constraint was violated") ||
+              err.message.includes("ConstraintSeeds") ||
+              err.message.includes("Error"),
+            "Should fail because reserve PDA seeds are wrong",
+          );
+        }
+      });
+
+      it("fails to initialize pool with invalid lst mint", async () => {
+        // create a random keypair to use as fake mint
+        const fakeMint = anchor.web3.Keypair.generate();
+        // console.log("Fake mint:", fakeMint.publicKey.toString());
+
+        // derive pool PDA with fake mint
+        const [fakePoolPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool"), fakeMint.publicKey.toBuffer()],
+          program.programId,
+        );
+        const [fakeReservePda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool-reserve"), fakePoolPda.toBuffer()],
+          program.programId,
+        );
+        // console.log("Fake Pool PDA:", fakePoolPda.toString());
+        // console.log("Fake Reserve PDA:", fakeReservePda.toString());
+
+        try {
+          await program.methods
+            .initializePool()
+            .accounts({
+              admin: admin.publicKey,
+              pool: fakePoolPda,
+              reserveAccount: fakeReservePda,
+              lstMint: fakeMint.publicKey, // ← not a real mint account
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("AccountNotInitialized") ||
+              err.message.includes("AccountOwnedByWrongProgram") ||
+              err.message.includes("Error"),
+            "Should fail because lstMint is not a real mint account",
+          );
+        }
+      });
+
+      it("fails to initialize pool with insufficient admin SOL", async () => {
+        // create a broke keypair with no SOL
+        const brokeAdmin = anchor.web3.Keypair.generate();
+        // console.log("Broke admin:", brokeAdmin.publicKey.toString());
+
+        // airdrop just a tiny amount - not enough to pay for rent
+        // pool rent ~ 1300 lamports
+        // reserve rent ~ 890880 lamports
+        // we give only 100 lamports which is not enough
+        const sig = await provider.connection.requestAirdrop(
+          brokeAdmin.publicKey,
+          100, // ← only 100 lamports, not enough
+        );
+        await provider.connection.confirmTransaction(sig, "confirmed");
+
+        const brokeAdminBalance = await provider.connection.getBalance(
+          brokeAdmin.publicKey,
+        );
+        // console.log("Broke admin balance:", brokeAdminBalance, "lamports");
+
+        // create a fresh lstMint so PDA is different
+        // brokeAdmin can't even afford this, so admin pays for it
+        const freshLstMint = await createMint(
+          provider.connection,
+          admin, // ← admin pays for mint creation
+          admin.publicKey,
+          admin.publicKey,
+          9,
+        );
+        // console.log("Fresh LST Mint:", freshLstMint.toString());
+
+        const [freshPoolPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool"), freshLstMint.toBuffer()],
+          program.programId,
+        );
+        const [freshReservePda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool-reserve"), freshPoolPda.toBuffer()],
+          program.programId,
+        );
+        // console.log("Fresh Pool PDA:", freshPoolPda.toString());
+        // console.log("Fresh Reserve PDA:", freshReservePda.toString());
+
+        try {
+          await program.methods
+            .initializePool()
+            .accounts({
+              admin: brokeAdmin.publicKey, // ← broke admin has no SOL
+              pool: freshPoolPda,
+              reserveAccount: freshReservePda,
+              lstMint: freshLstMint,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .signers([brokeAdmin]) // ← broke admin signs
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("insufficient lamports") ||
+              err.message.includes("Insufficient") ||
+              err.message.includes("Error"),
+            "Should fail because admin has insufficient SOL",
+          );
+        }
+      });
     });
   });
 
-  describe.skip("CREATE USER ATA and DEPOSIT STAKE TO POOL", () => {
+  describe("CHANGE LST MINT AND FREEZE AUTHORITY TO POOL PDA", () => {
+    describe("Success case", () => {
+      it("changes mint and freeze authority to pool PDA successfully", async () => {
+        // change mint authority from admin to pool PDA
+        await setAuthority(
+          provider.connection,
+          admin, // payer
+          lstMint, // mint account
+          admin.publicKey, // current authority
+          AuthorityType.MintTokens, // authority type
+          poolPda, // new authority
+        );
+
+        // change freeze authority from admin to pool PDA
+        await setAuthority(
+          provider.connection,
+          admin, // payer
+          lstMint, // mint account
+          admin.publicKey, // current authority
+          AuthorityType.FreezeAccount, // authority type
+          poolPda, // new authority
+        );
+
+        // verify both authorities changed
+        const mintInfo = await getMint(provider.connection, lstMint);
+        // console.log("Mint authority:", mintInfo.mintAuthority?.toString());
+        // console.log("Freeze authority:", mintInfo.freezeAuthority?.toString());
+
+        assert.equal(
+          mintInfo.mintAuthority?.toString(),
+          poolPda.toString(),
+          "Mint authority should be pool PDA",
+        );
+        assert.equal(
+          mintInfo.freezeAuthority?.toString(),
+          poolPda.toString(),
+          "Freeze authority should be pool PDA",
+        );
+      });
+    });
+
+    describe("Failure cases", () => {
+      it("fails to change mint authority with wrong current authority", async () => {
+        // user1 tries to change mint authority but is not the current authority
+        try {
+          await setAuthority(
+            provider.connection,
+            user1, // payer
+            lstMint, // mint account
+            user1.publicKey, // wrong current authority
+            AuthorityType.MintTokens, // authority type
+            user1.publicKey, // new authority
+          );
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("owner does not match") ||
+              err.message.includes("InvalidAccountData") ||
+              err.message.includes("Error"),
+            "Should fail because user1 is not the current mint authority",
+          );
+        }
+      });
+
+      it("fails to change freeze authority with wrong current authority", async () => {
+        // user2 tries to change freeze authority but is not the current authority
+        try {
+          await setAuthority(
+            provider.connection,
+            user2, // payer
+            lstMint, // mint account
+            user2.publicKey, // wrong current authority
+            AuthorityType.FreezeAccount, // authority type
+            user2.publicKey, // new authority
+          );
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("owner does not match") ||
+              err.message.includes("InvalidAccountData") ||
+              err.message.includes("Error"),
+            "Should fail because user2 is not the current freeze authority",
+          );
+        }
+      });
+
+      it("fails to change mint authority after it is already transferred to pool PDA", async () => {
+        // admin tries to change mint authority again
+        // but authority is now pool PDA not admin anymore
+        try {
+          await setAuthority(
+            provider.connection,
+            admin, // payer
+            lstMint, // mint account
+            admin.publicKey, // wrong current authority (was transferred to poolPda)
+            AuthorityType.MintTokens, // authority type
+            admin.publicKey, // new authority
+          );
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("owner does not match") ||
+              err.message.includes("InvalidAccountData") ||
+              err.message.includes("Error"),
+            "Should fail because mint authority is now pool PDA not admin",
+          );
+        }
+      });
+    });
+  });
+
+  describe.skip("CREATE USER ATA TO DEPOSIT STAKE TO POOL", () => {
     describe("Create user ATA for user1 and user1", () => {});
 
     describe("Deposit and delegate to pool", () => {});
