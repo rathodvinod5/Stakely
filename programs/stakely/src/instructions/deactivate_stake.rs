@@ -33,9 +33,9 @@ pub fn deactivate_stake_account(ctx: Context<DeactivateStakeAccount>) -> Result<
         signer_seeds
     );
 
-    if !pool.deactivating_stake_accounts.contains(&stake_account.key()) {
-        pool.deactivating_stake_accounts.push(stake_account.key());
-    }
+    // if !pool.deactivating_stake_accounts.contains(&stake_account.key()) { // uncomment this later
+    //     pool.deactivating_stake_accounts.push(stake_account.key());
+    // }
 
     stake_entry.stake_status = StakeStatus::Deactivating;
 
