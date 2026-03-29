@@ -17,12 +17,15 @@ pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reward_amount: u64) 
     let admin = &ctx.accounts.admin;
     let reserve_account = &ctx.accounts.reserve_account;
 
-    let reserve_lamports = reserve_account.to_account_info().lamports();
+    require_keys_eq!(pool.admin.key(), admin.key(), CustomErrors::NotTheOwner);
+    require!(reward_amount > 0, CustomErrors::InsufficientBalance);
+
+    let admin_lamports = admin.to_account_info().lamports();
     require!(
-        reserve_lamports >= reward_amount,
+        admin_lamports >= reward_amount,
         CustomErrors::InsufficientBalance
     );
-    require_keys_eq!(pool.admin.key(), admin.key(), CustomErrors::NotTheOwner);
+    // require!(pool.admin.key() == admin.key(), CustomErrors::NotTheOwner);
 
     let instruction = transfer(&admin.key(), &reserve_account.key(), reward_amount);
     let account_infos = &[
@@ -31,7 +34,7 @@ pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reward_amount: u64) 
         ctx.accounts.system_program.to_account_info(),
     ];
 
-    let _ = invoke(&instruction, account_infos);
+    let _ = invoke(&instruction, account_infos)?;
 
     pool.total_staked = pool.total_staked.checked_add(reward_amount.into()).unwrap();
 
@@ -40,12 +43,17 @@ pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reward_amount: u64) 
 
 #[derive(Accounts)]
 pub struct MockAccrueRewards<'info> {
-    #[account(mut, signer)]
+    #[account(
+        mut, 
+        signer,
+        constraint = admin.key() == pool.admin @ CustomErrors::NotTheOwner
+    )]
     pub admin: AccountInfo<'info>,
 
     #[account(
         mut,
         has_one = reserve_account,
+        has_one = admin
     )]
     pub pool: Account<'info, Pool>,
 

@@ -58,6 +58,9 @@ describe("stakely", () => {
   let fakeStakeAccount: anchor.web3.Keypair;
   let fakeStakeEntryPda: PublicKey;
 
+  // ── broken admin  ────────────────────────────────────────
+  let brokeAdmin: anchor.web3.Keypair;
+
   let unstakeAccount1: PublicKey;
   let unstakeAccount2: PublicKey;
 
@@ -402,7 +405,7 @@ describe("stakely", () => {
 
       it("fails to initialize pool with insufficient admin SOL", async () => {
         // create a broke keypair with no SOL
-        const brokeAdmin = anchor.web3.Keypair.generate();
+        brokeAdmin = anchor.web3.Keypair.generate();
 
         // airdrop just a tiny amount - not enough to pay for rent
         // pool rent ~ 1300 lamports
@@ -1194,6 +1197,266 @@ describe("stakely", () => {
             err.message.includes("already in use") ||
               err.message.includes("Error"),
             "Should fail because stake entry already exists",
+          );
+        }
+      });
+    });
+  });
+
+  describe("MOCK ACCRUE REWARDS", () => {
+    describe("Success cases", () => {
+      it("accrues rewards to reserve account successfully", async () => {
+        const rewardAmount = new anchor.BN(5 * LAMPORTS_PER_SOL);
+
+        // fetch pool state before accruing rewards
+        const poolBefore = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked before:",
+        //   poolBefore.totalStaked.toString(),
+        // );
+
+        // fetch reserve balance before
+        const reserveBalanceBefore = await provider.connection.getBalance(
+          reservePda,
+        );
+        // console.log("Reserve balance before:", reserveBalanceBefore);
+
+        // fetch admin balance before
+        const adminBalanceBefore = await provider.connection.getBalance(
+          admin.publicKey,
+        );
+        // console.log("Admin balance before:", adminBalanceBefore);
+
+        const tx = await program.methods
+          .mockAccrueRewards(rewardAmount)
+          .accounts({
+            admin: admin.publicKey,
+            pool: poolPda,
+            reserveAccount: reservePda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([admin])
+          .rpc({ commitment: "confirmed" });
+
+        // verify pool totalStaked increased by reward amount
+        const poolAfter = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked after:",
+        //   poolAfter.totalStaked.toString(),
+        // );
+
+        const expectedTotalStaked = new anchor.BN(
+          poolBefore.totalStaked.toString(),
+        ).add(rewardAmount);
+        // console.log("expected: ", expectedTotalStaked.toString());
+        assert.equal(
+          poolAfter.totalStaked.toString(),
+          expectedTotalStaked.toString(),
+          "Total staked should increase by reward amount",
+        );
+
+        // verify reserve balance increased by reward amount
+        const reserveBalanceAfter = await provider.connection.getBalance(
+          reservePda,
+        );
+        // console.log("Reserve balance after:", reserveBalanceAfter);
+        assert.equal(
+          reserveBalanceAfter,
+          reserveBalanceBefore + rewardAmount.toNumber(),
+          "Reserve balance should increase by reward amount",
+        );
+
+        // verify admin balance decreased by reward amount
+        const adminBalanceAfter = await provider.connection.getBalance(
+          admin.publicKey,
+        );
+        // console.log("Admin balance after:", adminBalanceAfter);
+        assert.ok(
+          adminBalanceAfter < adminBalanceBefore,
+          "Admin balance should decrease by reward amount",
+        );
+      });
+
+      it("accrues rewards multiple times successfully", async () => {
+        const rewardAmount = new anchor.BN(0.5 * LAMPORTS_PER_SOL);
+
+        const poolBefore = await program.account.pool.fetch(poolPda);
+        const reserveBalanceBefore = await provider.connection.getBalance(
+          reservePda,
+        );
+
+        // accrue rewards twice
+        for (let i = 0; i < 2; i++) {
+          const tx = await program.methods
+            .mockAccrueRewards(rewardAmount)
+            .accounts({
+              admin: admin.publicKey,
+              pool: poolPda,
+              reserveAccount: reservePda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
+          // console.log(`✅ mockAccrueRewards tx ${i + 1}:`, tx);
+        }
+
+        // verify pool totalStaked increased by 2x reward amount
+        const poolAfter = await program.account.pool.fetch(poolPda);
+        const expectedTotalStaked = new anchor.BN(
+          poolBefore.totalStaked.toString(),
+        ).add(rewardAmount.mul(new anchor.BN(2)));
+        // console.log(
+        //   "Pool totalStaked after 2x rewards:",
+        //   poolAfter.totalStaked.toString(),
+        // );
+
+        assert.equal(
+          poolAfter.totalStaked.toString(),
+          expectedTotalStaked.toString(),
+          "Total staked should increase by 2x reward amount",
+        );
+
+        // verify reserve balance increased by 2x reward amount
+        const reserveBalanceAfter = await provider.connection.getBalance(
+          reservePda,
+        );
+        assert.equal(
+          reserveBalanceAfter,
+          reserveBalanceBefore + rewardAmount.toNumber() * 2,
+          "Reserve balance should increase by 2x reward amount",
+        );
+      });
+    });
+
+    describe("Failure cases", () => {
+      it("fails to accrue rewards with wrong admin", async () => {
+        const rewardAmount = new anchor.BN(1 * LAMPORTS_PER_SOL);
+
+        try {
+          await program.methods
+            .mockAccrueRewards(rewardAmount)
+            .accounts({
+              admin: user1.publicKey, // ← wrong admin
+              pool: poolPda,
+              reserveAccount: reservePda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([user1]) // ← user1 signs not admin
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("NotTheOwner") ||
+              err.message.includes("Error"),
+            "Should fail because user1 is not the admin",
+          );
+        }
+      });
+
+      it("fails to accrue rewards with zero reward amount", async () => {
+        try {
+          await program.methods
+            .mockAccrueRewards(new anchor.BN(0)) // ← zero amount
+            .accounts({
+              admin: admin.publicKey,
+              pool: poolPda,
+              reserveAccount: reservePda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("InsufficientBalance") ||
+              err.message.includes("error"),
+            "Should fail because reward amount is 0",
+          );
+        }
+      });
+
+      it("fails to accrue rewards with wrong reserve account", async () => {
+        const rewardAmount = new anchor.BN(1 * LAMPORTS_PER_SOL);
+
+        try {
+          await program.methods
+            .mockAccrueRewards(rewardAmount)
+            .accounts({
+              admin: admin.publicKey,
+              pool: poolPda,
+              reserveAccount: anotherReservePda, // ← wrong reserve account
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("has_one") ||
+              err.message.includes("ConstraintHasOne") ||
+              err.message.includes("Error"),
+            "Should fail because reserve account does not match pool",
+          );
+        }
+      });
+
+      it("fails to accrue rewards with insufficient admin balance", async () => {
+        // create a fresh pool for broke admin
+        const freshLstMint = await createMint(
+          provider.connection,
+          admin, // ← admin pays for mint
+          brokeAdmin.publicKey,
+          brokeAdmin.publicKey,
+          9,
+        );
+        const [freshPoolPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool"), freshLstMint.toBuffer()],
+          program.programId,
+        );
+        const [freshReservePda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool-reserve"), freshPoolPda.toBuffer()],
+          program.programId,
+        );
+
+        // initialize fresh pool with admin paying
+        await program.methods
+          .initializePool()
+          .accounts({
+            admin: admin.publicKey,
+            pool: freshPoolPda,
+            reserveAccount: freshReservePda,
+            lstMint: freshLstMint,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([admin])
+          .rpc({ commitment: "confirmed" });
+
+        try {
+          await program.methods
+            .mockAccrueRewards(new anchor.BN(1 * LAMPORTS_PER_SOL))
+            .accounts({
+              admin: brokeAdmin.publicKey, // ← broke admin
+              pool: freshPoolPda,
+              reserveAccount: freshReservePda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([brokeAdmin])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          assert.ok(
+            err.message.includes("insufficient lamports") ||
+              err.message.includes("NotTheOwner") ||
+              err.message.includes("error"),
+            "Should fail because broke admin has insufficient SOL",
           );
         }
       });
