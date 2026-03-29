@@ -39,7 +39,7 @@ pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
     let seeds = &[
         b"pool-reserve".as_ref(),
         pool_key.as_ref(),
-        &[pool.reserve_bump],
+        // &[pool.reserve_bump],
     ];
     let signers_seeds = &[&seeds[..]];
     let instruction = transfer(&reserve_account.key(), &requester.key(), requested_lamports);
@@ -71,7 +71,7 @@ pub struct ProcessUnstake<'info> {
     #[account(
         mut,
         seeds = [b"pool-reserve", pool.key().as_ref()],
-        bump = pool.reserve_bump
+        bump  //= pool.reserve_bump
     )]
     pub reserve_account: UncheckedAccount<'info>,
 

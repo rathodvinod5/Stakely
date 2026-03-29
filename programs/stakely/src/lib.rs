@@ -13,32 +13,33 @@ pub mod stakely {
 
     use super::*;
 
-    pub fn initialize(ctx: Context<InitializePool>, lst_decimals: u8) -> Result<()> {
-        let _ = initialize_pool(ctx, lst_decimals);
+    pub fn initialize_pool(ctx: Context<InitializePool>) -> Result<()> {
+        let _ = instructions::initialize_pool(ctx);
         Ok(())
     }
 
-    pub fn deposit_stake(ctx: Context<DepositAndDelegate>, stake_amount: u64) -> Result<()> {
-        deposit_and_delegate(ctx, stake_amount);
+    pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64) -> Result<()> {
+        let _ = instructions::deposit_and_delegate(ctx, stake_amount);
         Ok(())
     }
 
-    pub fn unstake(ctx: Context<RequestUnstake>, unstake_token_lst_amount: u64) -> Result<()> {
-        request_unstake(ctx, unstake_token_lst_amount);
-        Ok(())
-    }
+    // pub fn request_unstake(ctx: Context<RequestUnstake>, unstake_token_lst_amount: u64) -> Result<()> {
+    //     request_unstake(ctx, unstake_token_lst_amount);
+    //     Ok(())
+    // }
 
-    pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
-        Ok(())
-    }
+    // pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
+    //     process_unstake(ctx);
+    //     Ok(())
+    // }
 
-    pub fn accrue_rewards(ctx: Context<MockAccrueRewards>, reawrd_lamprts: u64) -> Result<()> {
-        mock_accrue_rewards(ctx, reawrd_lamprts);
-        Ok(())
-    }
+    // pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reawrd_lamprts: u64) -> Result<()> {
+    //     mock_accrue_rewards(ctx, reawrd_lamprts);
+    //     Ok(())
+    // }
 
-    pub fn deactivate_account(ctx: Context<DeactivateStakeAccount>) -> Result<()> {
-        deactivate_stake_account(ctx);
-        Ok(())
-    }
+    // pub fn deactivate_stake_account(ctx: Context<DeactivateStakeAccount>) -> Result<()> {
+    //     deactivate_stake_account(ctx);
+    //     Ok(())
+    // }
 }
