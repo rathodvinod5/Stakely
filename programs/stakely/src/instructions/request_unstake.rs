@@ -5,23 +5,20 @@ use crate::{errors::CustomErrors, states::{ Pool, StakeEntry, StakeStatus, Unsta
 
 // Admin function: process an UnstakeTicket (transfer lamports when available)
 // - The admin or keeper will call this when sufficient liquid lamports exist in Reserve
-pub fn request_unstake(ctx: Context<RequestUnstake>, unstake_token_lst_amount: u64) -> Result<()> {
+pub fn request_unstake(ctx: Context<RequestUnstake>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
     let lst_mint = &ctx.accounts.lst_mint;
     let user_token_ata = &ctx.accounts.user_token_ata;
     let unstake_ticket = &mut ctx.accounts.unstake_ticket;
 
     let unstake_ata_lst_balance = user_token_ata.amount;
+
     require!(
-        unstake_token_lst_amount > 0,
+        unstake_ata_lst_balance > 0,
         CustomErrors::InvalidUnstakeAmount
     );
     require!(
-        unstake_ata_lst_balance >= unstake_token_lst_amount,
-        CustomErrors::InsufficientUserTokenBalance
-    );
-    require!(
-        pool.total_lst_minted >= unstake_token_lst_amount.into(),
+        pool.total_lst_minted >= unstake_ata_lst_balance.into(),
         CustomErrors::InvalidStakeAmount
     );
     require!(
@@ -29,14 +26,19 @@ pub fn request_unstake(ctx: Context<RequestUnstake>, unstake_token_lst_amount: u
         CustomErrors::NoActiveStakes
     );
 
-    let account_info = Burn {
-        mint: lst_mint.to_account_info(),
-        from: user_token_ata.to_account_info(),
-        authority: ctx.accounts.user.to_account_info(),
-    };
-    let system_program = ctx.accounts.system_program.to_account_info();
-    let cpi_context = CpiContext::new(system_program, account_info);
-    let _ = token::burn(cpi_context, unstake_token_lst_amount);
+    // fix 1: use token_program not system_program
+    // fix 2: propagate error with ?
+    token::burn(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),  // ← correct program
+            Burn {
+                mint: lst_mint.to_account_info(),
+                from: user_token_ata.to_account_info(),
+                authority: ctx.accounts.user.to_account_info(),
+            },
+        ),
+        unstake_ata_lst_balance,
+    )?;  // ← propagate error
 
     let unstake_ata_lst_balance_u128 = unstake_ata_lst_balance as u128;
     let lamports_eq = unstake_ata_lst_balance_u128
@@ -51,13 +53,11 @@ pub fn request_unstake(ctx: Context<RequestUnstake>, unstake_token_lst_amount: u
     unstake_ticket.is_released = false;
     unstake_ticket.index = pool.unstaked_count;
 
-    // please clarify this again, because we need to perform subtraction, not addition
     pool.total_staked = pool
         .total_staked
         .checked_sub(lamports_eq)
         .ok_or(CustomErrors::MathOverflow)?;
 
-    // please clarify this again, because we need to perform subtraction, not addition
     pool.total_lst_minted = pool
         .total_lst_minted
         .checked_sub(unstake_ata_lst_balance_u128)
@@ -67,6 +67,12 @@ pub fn request_unstake(ctx: Context<RequestUnstake>, unstake_token_lst_amount: u
         .unstaked_count
         .checked_add(1)
         .unwrap_or(pool.unstaked_count);
+
+    msg!("Unstake requested: {} LST burned", unstake_ata_lst_balance);
+    msg!("Lamports equivalent: {}", lamports_eq);
+    msg!("Pool totalStaked after: {}", pool.total_staked);
+    msg!("Pool totalLstMinted after: {}", pool.total_lst_minted);
+    msg!("Pool unstakedCount after: {}", pool.unstaked_count);
 
     Ok(())
 }
