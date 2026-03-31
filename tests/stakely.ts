@@ -1462,6 +1462,387 @@ describe("stakely", () => {
       });
     });
   });
+
+  describe("REQUEST UNSTAKE", () => {
+    describe("Success cases", () => {
+      it("requests unstake successfully for user1 with full LST balance", async () => {
+        // fetch user1 full LST balance
+        // const user1AtaInfo = await getAccount(provider.connection, userAta1);
+        // const user1LstBalance = BigInt(user1AtaInfo.amount);
+        // console.log("User1 LST balance:", user1LstBalance.toString());
+
+        // fetch pool state before
+        const poolBefore = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked before:",
+        //   poolBefore.totalStaked.toString(),
+        // );
+        // console.log(
+        //   "Pool totalLstMinted before:",
+        //   poolBefore.totalLstMinted.toString(),
+        // );
+        // console.log(
+        //   "Pool unstakedCount before:",
+        //   poolBefore.unstakedCount.toString(),
+        // );
+
+        // derive unstake ticket PDA using current unstaked_count
+        [unstakeTicket1Pda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("unstake-ticket"),
+            poolPda.toBuffer(),
+            poolBefore.unstakedCount.toArrayLike(Buffer, "le", 8),
+          ],
+          program.programId,
+        );
+        // console.log("Unstake Ticket1 PDA:", unstakeTicket1Pda.toString());
+
+        const tx = await program.methods
+          .requestUnstake()
+          .accounts({
+            user: user1.publicKey,
+            userTokenAta: userAta1,
+            pool: poolPda,
+            lstMint: lstMint,
+            stakeEntry: stakeEntry1Pda,
+            unstakeTicket: unstakeTicket1Pda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([user1])
+          .rpc({ commitment: "confirmed" });
+        // console.log("✅ requestUnstake tx:", tx);
+
+        // verify pool state after
+        const poolAfter = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked after:",
+        //   poolAfter.totalStaked.toString(),
+        // );
+        // console.log(
+        //   "Pool totalLstMinted after:",
+        //   poolAfter.totalLstMinted.toString(),
+        // );
+        // console.log(
+        //   "Pool unstakedCount after:",
+        //   poolAfter.unstakedCount.toString(),
+        // );
+
+        assert.equal(
+          poolAfter.unstakedCount.toString(),
+          "1",
+          "Unstaked count should be 1",
+        );
+        assert.ok(
+          new anchor.BN(poolAfter.totalStaked.toString()).lt(
+            new anchor.BN(poolBefore.totalStaked.toString()),
+          ),
+          "Total staked should decrease",
+        );
+        assert.ok(
+          new anchor.BN(poolAfter.totalLstMinted.toString()).lt(
+            new anchor.BN(poolBefore.totalLstMinted.toString()),
+          ),
+          "Total LST minted should decrease",
+        );
+
+        // verify unstake ticket
+        const unstakeTicket = await program.account.unstakeTicket.fetch(
+          unstakeTicket1Pda,
+        );
+        // console.log("Unstake ticket pool:", unstakeTicket.pool.toString());
+        // console.log(
+        //   "Unstake ticket requester:",
+        //   unstakeTicket.requester.toString(),
+        // );
+        // console.log(
+        //   "Unstake ticket requestedAmount:",
+        //   unstakeTicket.requestedAmount.toString(),
+        // );
+        // console.log("Unstake ticket isReleased:", unstakeTicket.isReleased);
+        // console.log("Unstake ticket index:", unstakeTicket.index.toString());
+
+        assert.equal(
+          unstakeTicket.pool.toString(),
+          poolPda.toString(),
+          "Pool should match",
+        );
+        assert.equal(
+          unstakeTicket.requester.toString(),
+          user1.publicKey.toString(),
+          "Requester should be user1",
+        );
+        assert.ok(
+          new anchor.BN(unstakeTicket.requestedAmount.toString()).gt(
+            new anchor.BN(0),
+          ),
+          "Requested amount should be greater than 0",
+        );
+        assert.equal(
+          unstakeTicket.isReleased,
+          false,
+          "Should not be released yet",
+        );
+        assert.equal(unstakeTicket.index.toString(), "0", "Index should be 0");
+
+        // verify user1 LST balance is now 0
+        const user1AtaAfter = await getAccount(provider.connection, userAta1);
+        // console.log(
+        //   "User1 LST balance after:",
+        //   user1AtaAfter.amount.toString(),
+        // );
+        assert.equal(
+          user1AtaAfter.amount.toString(),
+          "0",
+          "User1 LST balance should be 0 after full unstake",
+        );
+      });
+
+      it("requests unstake successfully for user2 with full LST balance", async () => {
+        // const user2AtaInfo = await getAccount(provider.connection, userAta2);
+        // const user2LstBalance = BigInt(user2AtaInfo.amount);
+        // console.log("User2 LST balance:", user2LstBalance.toString());
+
+        const poolBefore = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked before:",
+        //   poolBefore.totalStaked.toString(),
+        // );
+        // console.log(
+        //   "Pool totalLstMinted before:",
+        //   poolBefore.totalLstMinted.toString(),
+        // );
+        // console.log(
+        //   "Pool unstakedCount before:",
+        //   poolBefore.unstakedCount.toString(),
+        // );
+
+        [unstakeTicket2Pda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("unstake-ticket"),
+            poolPda.toBuffer(),
+            poolBefore.unstakedCount.toArrayLike(Buffer, "le", 8),
+          ],
+          program.programId,
+        );
+        // console.log("Unstake Ticket2 PDA:", unstakeTicket2Pda.toString());
+
+        const tx = await program.methods
+          .requestUnstake()
+          .accounts({
+            user: user2.publicKey,
+            userTokenAta: userAta2,
+            pool: poolPda,
+            lstMint: lstMint,
+            stakeEntry: stakeEntry2Pda,
+            unstakeTicket: unstakeTicket2Pda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([user2])
+          .rpc({ commitment: "confirmed" });
+        // console.log("✅ requestUnstake tx:", tx);
+
+        const poolAfter = await program.account.pool.fetch(poolPda);
+        // console.log(
+        //   "Pool totalStaked after:",
+        //   poolAfter.totalStaked.toString(),
+        // );
+        // console.log(
+        //   "Pool totalLstMinted after:",
+        //   poolAfter.totalLstMinted.toString(),
+        // );
+        // console.log(
+        //   "Pool unstakedCount after:",
+        //   poolAfter.unstakedCount.toString(),
+        // );
+
+        assert.equal(
+          poolAfter.unstakedCount.toString(),
+          "2",
+          "Unstaked count should be 2",
+        );
+
+        const unstakeTicket = await program.account.unstakeTicket.fetch(
+          unstakeTicket2Pda,
+        );
+        // console.log(
+        //   "Unstake ticket2 requester:",
+        //   unstakeTicket.requester.toString(),
+        // );
+        // console.log(
+        //   "Unstake ticket2 requestedAmount:",
+        //   unstakeTicket.requestedAmount.toString(),
+        // );
+        // console.log("Unstake ticket2 index:", unstakeTicket.index.toString());
+
+        assert.equal(
+          unstakeTicket.requester.toString(),
+          user2.publicKey.toString(),
+          "Requester should be user2",
+        );
+        assert.ok(
+          new anchor.BN(unstakeTicket.requestedAmount.toString()).gt(
+            new anchor.BN(0),
+          ),
+          "Requested amount should be greater than 0",
+        );
+        assert.equal(
+          unstakeTicket.isReleased,
+          false,
+          "Should not be released yet",
+        );
+        assert.equal(unstakeTicket.index.toString(), "1", "Index should be 1");
+
+        // verify user2 LST balance is now 0
+        const user2AtaAfter = await getAccount(provider.connection, userAta2);
+        // console.log(
+        //   "User2 LST balance after:",
+        //   user2AtaAfter.amount.toString(),
+        // );
+        assert.equal(
+          user2AtaAfter.amount.toString(),
+          "0",
+          "User2 LST balance should be 0 after full unstake",
+        );
+      });
+    });
+
+    describe("Failure cases", () => {
+      it("fails to request unstake when LST balance is already 0", async () => {
+        // user1 already fully unstaked in success case
+        // so LST balance is 0
+        const user1AtaInfo = await getAccount(provider.connection, userAta1);
+        assert.equal(
+          user1AtaInfo.amount.toString(),
+          "0",
+          "User1 LST balance should already be 0",
+        );
+
+        const poolState = await program.account.pool.fetch(poolPda);
+        const [freshUnstakeTicketPda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("unstake-ticket"),
+            poolPda.toBuffer(),
+            poolState.unstakedCount.toArrayLike(Buffer, "le", 8),
+          ],
+          program.programId,
+        );
+
+        try {
+          await program.methods
+            .requestUnstake()
+            .accounts({
+              user: user1.publicKey,
+              userTokenAta: userAta1,
+              pool: poolPda,
+              lstMint: lstMint,
+              stakeEntry: stakeEntry1Pda,
+              unstakeTicket: freshUnstakeTicketPda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .signers([user1])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("InvalidUnstakeAmount") ||
+              err.message.includes("error"),
+            "Should fail because LST balance is 0",
+          );
+        }
+      });
+
+      it("fails to request unstake with empty LST balance", async () => {
+        // user1 already fully unstaked so LST balance is 0
+        const user1AtaInfo = await getAccount(provider.connection, userAta1);
+        // console.log("User1 LST balance:", user1AtaInfo.amount.toString());
+        assert.equal(
+          user1AtaInfo.amount.toString(),
+          "0",
+          "User1 LST balance should already be 0",
+        );
+
+        const poolState = await program.account.pool.fetch(poolPda);
+        const [freshUnstakeTicketPda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("unstake-ticket"),
+            poolPda.toBuffer(),
+            poolState.unstakedCount.toArrayLike(Buffer, "le", 8),
+          ],
+          program.programId,
+        );
+
+        try {
+          await program.methods
+            .requestUnstake() // ← non zero but balance is 0
+            .accounts({
+              user: user1.publicKey,
+              userTokenAta: userAta1,
+              pool: poolPda,
+              lstMint: lstMint,
+              stakeEntry: stakeEntry1Pda,
+              unstakeTicket: freshUnstakeTicketPda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .signers([user1])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("InsufficientUserTokenBalance") ||
+              err.message.includes("Error"),
+            "Should fail because user1 LST balance is 0",
+          );
+        }
+      });
+
+      it("fails to request unstake with wrong stake entry", async () => {
+        const poolState = await program.account.pool.fetch(poolPda);
+        const [freshUnstakeTicketPda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("unstake-ticket"),
+            poolPda.toBuffer(),
+            poolState.unstakedCount.toArrayLike(Buffer, "le", 8),
+          ],
+          program.programId,
+        );
+
+        try {
+          await program.methods
+            .requestUnstake()
+            .accounts({
+              user: user1.publicKey,
+              userTokenAta: userAta1,
+              pool: poolPda,
+              lstMint: lstMint,
+              stakeEntry: stakeEntry2Pda, // ← user2's stake entry for user1
+              unstakeTicket: freshUnstakeTicketPda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .signers([user1])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("ConstraintHasOne") ||
+              err.message.includes("has_one") ||
+              err.message.includes("Error"),
+            "Should fail because wrong stake entry passed",
+          );
+        }
+      });
+    });
+  });
 });
 
 async function airdrop(connection: any, address: any, amount = 1000000000) {
