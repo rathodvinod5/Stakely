@@ -34,59 +34,6 @@ pub fn initialize_pool(ctx: Context<InitializePool>) -> Result<()> {
     // pool.deactivating_stake_accounts = Vec::new();
     // pool.deactivating_stake_accounts = vec![]; // Vec::<Pubkey>::new();
 
-//    msg!("====> entered initialize_pool");
-//     let pool = &mut ctx.accounts.pool;
-//     let lst_mint = &ctx.accounts.lst_mint;
-//     let admin = &ctx.accounts.admin;
-//     let reserve_account = &ctx.accounts.reserve_account;
-
-//     // manually derive and validate reserve PDA
-//     let (expected_reserve_pda, reserve_bump) = Pubkey::find_program_address(
-//         &[b"pool-reserve", pool.key().as_ref()],
-//         ctx.program_id,
-//     );
-//     require!(
-//         reserve_account.key() == expected_reserve_pda,
-//         CustomErrors::KeyMismatch
-//     );
-//     msg!("Reserve PDA validated: {}", reserve_account.key());
-
-//     // fund reserve account with rent exempt minimum
-//     let rent_exempt = Rent::get()?.minimum_balance(0);
-//     let reserve_balance = reserve_account.lamports();
-//     if reserve_balance < rent_exempt {
-//         invoke(
-//             &transfer(
-//                 &admin.key(),
-//                 &reserve_account.key(),
-//                 rent_exempt - reserve_balance,
-//             ),
-//             &[
-//                 admin.to_account_info(),
-//                 reserve_account.to_account_info(),
-//                 ctx.accounts.system_program.to_account_info(),
-//             ],
-//         )?;
-//         msg!("Reserve account funded: {} lamports", rent_exempt);
-//     }
-
-//     // store pool state
-//     pool.admin = admin.key();
-//     pool.reserve_account = reserve_account.key();
-//     pool.lst_decimals = lst_mint.decimals;
-//     pool.lst_mint = lst_mint.key();
-//     pool.total_staked = 0;
-//     pool.total_lst_minted = 0;
-//     pool.staked_count = 0;
-//     pool.unstaked_count = 0;
-//     pool.bump = ctx.bumps.pool;
-//     pool.reserve_bump = reserve_bump;               // ← use manually derived bump
-
-//     msg!("Pool initialized successfully");
-//     msg!("Pool PDA: {}", pool.key());
-//     msg!("Reserve PDA: {}", reserve_account.key());
-//     msg!("Reserve bump: {}", pool.reserve_bump);
-
     Ok(())
 }
 
