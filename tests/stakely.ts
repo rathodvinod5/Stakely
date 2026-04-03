@@ -1850,17 +1850,17 @@ describe("stakely", () => {
   });
 
   describe("PROCESS UNSTAKE", () => {
-    before(async () => {
-      await airdrop(provider.connection, reservePda, 5 * LAMPORTS_PER_SOL);
-
-      // const reserveBalance = await provider.connection.getBalance(reservePda);
-      // console.log(
-      //   "Reserve balance in before processing: ",
-      //   formatWithUnderscores(reserveBalance),
-      // );
-    });
-
     describe("Success cases", () => {
+      before(async () => {
+        await airdrop(provider.connection, reservePda, 5 * LAMPORTS_PER_SOL);
+
+        // const reserveBalance = await provider.connection.getBalance(reservePda);
+        // console.log(
+        //   "Reserve balance in before processing: ",
+        //   formatWithUnderscores(reserveBalance),
+        // );
+      });
+
       it("processes unstake successfully for user1", async () => {
         // fetch balances before
         const pool = await program.account.pool.fetch(poolPda);
@@ -1952,7 +1952,6 @@ describe("stakely", () => {
           await program.account.unstakeTicket.fetch(unstakeTicket1Pda);
           assert.fail("Unstake ticket should be closed");
         } catch (err: any) {
-          console.log("Unstake ticket correctly closed");
           assert.ok(
             err.message.includes("Account does not exist") ||
               err.message.includes("Error"),
@@ -2048,297 +2047,237 @@ describe("stakely", () => {
       });
     });
 
-    // describe.skip("Failure cases", () => {
-    //   it.skip("fails to process unstake with wrong admin", async () => {
-    //     // create a fresh unstake ticket for testing
-    //     // we need a fresh one since ticket1 and ticket2 are already closed
-    //     // so we need to first create a new deposit and unstake request
-    //     // instead just verify the admin check works with a dummy ticket
-    //     try {
-    //       await program.methods
-    //         .processUnstake()
-    //         .accounts({
-    //           admin: user1.publicKey, // ← wrong admin
-    //           requester: user1.publicKey,
-    //           pool: poolPda,
-    //           reserveAccount: reservePda,
-    //           unstakeTicket: unstakeTicket1Pda,
-    //           systemProgram: anchor.web3.SystemProgram.programId,
-    //           tokenProgram: TOKEN_PROGRAM_ID,
-    //         })
-    //         .signers([user1]) // ← user1 signs not admin
-    //         .rpc({ commitment: "confirmed" });
+    describe("Failure cases", () => {
+      it("fails to process unstake with wrong admin", async () => {
+        // create a fresh unstake ticket for testing
+        // we need a fresh one since ticket1 and ticket2 are already closed
+        // so we need to first create a new deposit and unstake request
+        // instead just verify the admin check works with a dummy ticket
+        try {
+          await program.methods
+            .processUnstake()
+            .accounts({
+              admin: user1.publicKey, // ← wrong admin
+              requester: user1.publicKey,
+              pool: poolPda,
+              reserveAccount: reservePda,
+              unstakeTicket: unstakeTicket1Pda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .signers([user1]) // ← user1 signs not admin
+            .rpc({ commitment: "confirmed" });
 
-    //       assert.fail("Should have thrown an error");
-    //     } catch (err: any) {
-    //       console.log("Expected error caught:", err.message);
-    //       assert.ok(
-    //         err.message.includes("NotTheOwner") ||
-    //           err.message.includes("Error"),
-    //         "Should fail because user1 is not the admin",
-    //       );
-    //       console.log("✅ Correctly rejected wrong admin");
-    //     }
-    //   });
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("NotTheOwner") ||
+              err.message.includes("Error"),
+            "Should fail because user1 is not the admin",
+          );
+        }
+      });
 
-    //   it.skip("fails to process unstake with insufficient reserve balance", async () => {
-    //     // create a fresh stake account
-    //     const freshStakeAccount = anchor.web3.Keypair.generate();
-    //     const stakeAccountRent =
-    //       await provider.connection.getMinimumBalanceForRentExemption(200);
+      // comment before section from PROCESS UNSTAKE/Success case, second test case will fail
+      // for user2 due to shortage of sols from reserve_account
+      it.skip("fails to process unstake with insufficient reserve balance", async () => {
+        // create a fresh stake account
+        const freshStakeAccount = anchor.web3.Keypair.generate();
+        const stakeAccountRent =
+          await provider.connection.getMinimumBalanceForRentExemption(200);
 
-    //     // airdrop to user1 for fresh deposit
-    //     const sig = await provider.connection.requestAirdrop(
-    //       user1.publicKey,
-    //       10 * LAMPORTS_PER_SOL,
-    //     );
-    //     await provider.connection.confirmTransaction(sig, "confirmed");
+        // airdrop to user1 for fresh deposit
+        const sig = await provider.connection.requestAirdrop(
+          user1.publicKey,
+          10 * LAMPORTS_PER_SOL,
+        );
+        await provider.connection.confirmTransaction(sig, "confirmed");
 
-    //     const createStakeAccountTx = new anchor.web3.Transaction().add(
-    //       anchor.web3.SystemProgram.createAccount({
-    //         fromPubkey: user1.publicKey,
-    //         newAccountPubkey: freshStakeAccount.publicKey,
-    //         lamports: 2 * LAMPORTS_PER_SOL + stakeAccountRent,
-    //         space: 200,
-    //         programId: anchor.web3.StakeProgram.programId,
-    //       }),
-    //       anchor.web3.StakeProgram.initialize({
-    //         stakePubkey: freshStakeAccount.publicKey,
-    //         authorized: new anchor.web3.Authorized(
-    //           user1.publicKey,
-    //           user1.publicKey,
-    //         ),
-    //         lockup: new anchor.web3.Lockup(0, 0, user1.publicKey),
-    //       }),
-    //     );
-    //     await provider.sendAndConfirm(
-    //       createStakeAccountTx,
-    //       [user1, freshStakeAccount],
-    //       {
-    //         commitment: "confirmed",
-    //       },
-    //     );
+        const createStakeAccountTx = new anchor.web3.Transaction().add(
+          anchor.web3.SystemProgram.createAccount({
+            fromPubkey: user1.publicKey,
+            newAccountPubkey: freshStakeAccount.publicKey,
+            lamports: 2 * LAMPORTS_PER_SOL + stakeAccountRent,
+            space: 200,
+            programId: anchor.web3.StakeProgram.programId,
+          }),
+          anchor.web3.StakeProgram.initialize({
+            stakePubkey: freshStakeAccount.publicKey,
+            authorized: new anchor.web3.Authorized(
+              user1.publicKey,
+              user1.publicKey,
+            ),
+            lockup: new anchor.web3.Lockup(0, 0, user1.publicKey),
+          }),
+        );
+        await provider.sendAndConfirm(
+          createStakeAccountTx,
+          [user1, freshStakeAccount],
+          {
+            commitment: "confirmed",
+          },
+        );
 
-    //     // transfer authority to pool PDA
-    //     const transferAuthTx = new anchor.web3.Transaction().add(
-    //       anchor.web3.StakeProgram.authorize({
-    //         stakePubkey: freshStakeAccount.publicKey,
-    //         authorizedPubkey: user1.publicKey,
-    //         newAuthorizedPubkey: poolPda,
-    //         stakeAuthorizationType: anchor.web3.StakeAuthorizationLayout.Staker,
-    //       }),
-    //       anchor.web3.StakeProgram.authorize({
-    //         stakePubkey: freshStakeAccount.publicKey,
-    //         authorizedPubkey: user1.publicKey,
-    //         newAuthorizedPubkey: poolPda,
-    //         stakeAuthorizationType:
-    //           anchor.web3.StakeAuthorizationLayout.Withdrawer,
-    //       }),
-    //     );
-    //     await provider.sendAndConfirm(transferAuthTx, [user1], {
-    //       commitment: "confirmed",
-    //     });
+        // transfer authority to pool PDA
+        const transferAuthTx = new anchor.web3.Transaction().add(
+          anchor.web3.StakeProgram.authorize({
+            stakePubkey: freshStakeAccount.publicKey,
+            authorizedPubkey: user1.publicKey,
+            newAuthorizedPubkey: poolPda,
+            stakeAuthorizationType: anchor.web3.StakeAuthorizationLayout.Staker,
+          }),
+          anchor.web3.StakeProgram.authorize({
+            stakePubkey: freshStakeAccount.publicKey,
+            authorizedPubkey: user1.publicKey,
+            newAuthorizedPubkey: poolPda,
+            stakeAuthorizationType:
+              anchor.web3.StakeAuthorizationLayout.Withdrawer,
+          }),
+        );
+        await provider.sendAndConfirm(transferAuthTx, [user1], {
+          commitment: "confirmed",
+        });
 
-    //     // get fresh ATA for user1
-    //     const freshAta = await getOrCreateAssociatedTokenAccount(
-    //       provider.connection,
-    //       admin,
-    //       lstMint,
-    //       user1.publicKey,
-    //     );
+        // get fresh ATA for user1
+        const freshAta = await getOrCreateAssociatedTokenAccount(
+          provider.connection,
+          admin,
+          lstMint,
+          user1.publicKey,
+        );
 
-    //     // derive fresh stake entry PDA
-    //     const [freshStakeEntryPda] = PublicKey.findProgramAddressSync(
-    //       [
-    //         Buffer.from("stake-entry"),
-    //         poolPda.toBuffer(),
-    //         freshStakeAccount.publicKey.toBuffer(),
-    //       ],
-    //       program.programId,
-    //     );
+        // derive fresh stake entry PDA
+        const [freshStakeEntryPda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("stake-entry"),
+            poolPda.toBuffer(),
+            freshStakeAccount.publicKey.toBuffer(),
+          ],
+          program.programId,
+        );
 
-    //     // deposit
-    //     await program.methods
-    //       .depositAndDelegate(new anchor.BN(2 * LAMPORTS_PER_SOL))
-    //       .accounts({
-    //         user: user1.publicKey,
-    //         pool: poolPda,
-    //         reserveAccount: reservePda,
-    //         stakeAccount: freshStakeAccount.publicKey,
-    //         lstMint: lstMint,
-    //         userAta: freshAta.address,
-    //         stakeEntry: freshStakeEntryPda,
-    //         systemProgram: anchor.web3.SystemProgram.programId,
-    //         tokenProgram: TOKEN_PROGRAM_ID,
-    //         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-    //       })
-    //       .signers([user1])
-    //       .rpc({ commitment: "confirmed" });
+        // deposit
+        await program.methods
+          .depositAndDelegate(new anchor.BN(2 * LAMPORTS_PER_SOL))
+          .accounts({
+            user: user1.publicKey,
+            pool: poolPda,
+            reserveAccount: reservePda,
+            stakeAccount: freshStakeAccount.publicKey,
+            lstMint: lstMint,
+            userAta: freshAta.address,
+            stakeEntry: freshStakeEntryPda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([user1])
+          .rpc({ commitment: "confirmed" });
 
-    //     // request unstake
-    //     const poolState = await program.account.pool.fetch(poolPda);
-    //     const [freshUnstakeTicketPda] = PublicKey.findProgramAddressSync(
-    //       [
-    //         Buffer.from("unstake-ticket"),
-    //         poolPda.toBuffer(),
-    //         poolState.unstakedCount.toArrayLike(Buffer, "le", 8),
-    //       ],
-    //       program.programId,
-    //     );
+        // request unstake
+        const poolState = await program.account.pool.fetch(poolPda);
+        const [freshUnstakeTicketPda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("unstake-ticket"),
+            poolPda.toBuffer(),
+            poolState.unstakedCount.toArrayLike(Buffer, "le", 8),
+          ],
+          program.programId,
+        );
 
-    //     await program.methods
-    //       .requestUnstake()
-    //       .accounts({
-    //         user: user1.publicKey,
-    //         userTokenAta: freshAta.address,
-    //         pool: poolPda,
-    //         lstMint: lstMint,
-    //         stakeEntry: freshStakeEntryPda,
-    //         unstakeTicket: freshUnstakeTicketPda,
-    //         systemProgram: anchor.web3.SystemProgram.programId,
-    //         tokenProgram: TOKEN_PROGRAM_ID,
-    //       })
-    //       .signers([user1])
-    //       .rpc({ commitment: "confirmed" });
+        await program.methods
+          .requestUnstake()
+          .accounts({
+            user: user1.publicKey,
+            userTokenAta: freshAta.address,
+            pool: poolPda,
+            lstMint: lstMint,
+            stakeEntry: freshStakeEntryPda,
+            unstakeTicket: freshUnstakeTicketPda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([user1])
+          .rpc({ commitment: "confirmed" });
 
-    //     // drain reserve account so it has insufficient balance
-    //     const reserveBalance = await provider.connection.getBalance(reservePda);
-    //     console.log("Reserve balance before drain:", reserveBalance);
+        // drain reserve account so it has insufficient balance
+        const reserveBalance = await provider.connection.getBalance(reservePda);
+        console.log("Reserve balance before drain:", reserveBalance);
 
-    //     // fetch unstake ticket requested amount
-    //     const freshUnstakeTicket = await program.account.unstakeTicket.fetch(
-    //       freshUnstakeTicketPda,
-    //     );
-    //     console.log(
-    //       "Requested amount:",
-    //       freshUnstakeTicket.requestedAmount.toString(),
-    //     );
+        // fetch unstake ticket requested amount
+        const freshUnstakeTicket = await program.account.unstakeTicket.fetch(
+          freshUnstakeTicketPda,
+        );
+        console.log(
+          "Requested amount:",
+          freshUnstakeTicket.requestedAmount.toString(),
+        );
 
-    //     try {
-    //       // process unstake should fail because reserve is insufficient
-    //       // we verify this by checking requested amount > reserve balance
-    //       const requestedAmount = freshUnstakeTicket.requestedAmount.toNumber();
-    //       require(reserveBalance <
-    //         requestedAmount, "Reserve should be insufficient for this test");
+        try {
+          // process unstake should fail because reserve is insufficient
+          // we verify this by checking requested amount > reserve balance
+          const requestedAmount = freshUnstakeTicket.requestedAmount.toNumber();
+          require(reserveBalance <
+            requestedAmount, "Reserve should be insufficient for this test");
 
-    //       await program.methods
-    //         .processUnstake()
-    //         .accounts({
-    //           admin: admin.publicKey,
-    //           requester: user1.publicKey,
-    //           pool: poolPda,
-    //           reserveAccount: reservePda,
-    //           unstakeTicket: freshUnstakeTicketPda,
-    //           systemProgram: anchor.web3.SystemProgram.programId,
-    //           tokenProgram: TOKEN_PROGRAM_ID,
-    //         })
-    //         .signers([admin])
-    //         .rpc({ commitment: "confirmed" });
+          await program.methods
+            .processUnstake()
+            .accounts({
+              admin: admin.publicKey,
+              requester: user1.publicKey,
+              pool: poolPda,
+              reserveAccount: reservePda,
+              unstakeTicket: freshUnstakeTicketPda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
 
-    //       assert.fail("Should have thrown an error");
-    //     } catch (err: any) {
-    //       console.log("Expected error caught:", err.message);
-    //       assert.ok(
-    //         err.message.includes("InsufficientBalance") ||
-    //           err.message.includes("Error"),
-    //         "Should fail because reserve has insufficient balance",
-    //       );
-    //       console.log("✅ Correctly rejected insufficient reserve balance");
-    //     }
-    //   });
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("InsufficientBalance") ||
+              err.message.includes("Error"),
+            "Should fail because reserve has insufficient balance",
+          );
+          console.log("✅ Correctly rejected insufficient reserve balance");
+        }
+      });
 
-    //   it.skip("fails to process unstake with wrong requester", async () => {
-    //     // unstakeTicket1 is already closed so use a conceptual check
-    //     // passing user2 as requester for user1's ticket constraint
-    //     try {
-    //       await program.methods
-    //         .processUnstake()
-    //         .accounts({
-    //           admin: admin.publicKey,
-    //           requester: user2.publicKey, // ← wrong requester
-    //           pool: poolPda,
-    //           reserveAccount: reservePda,
-    //           unstakeTicket: unstakeTicket1Pda,
-    //           systemProgram: anchor.web3.SystemProgram.programId,
-    //           tokenProgram: TOKEN_PROGRAM_ID,
-    //         })
-    //         .signers([admin])
-    //         .rpc({ commitment: "confirmed" });
+      it("fails to process unstake with wrong requester", async () => {
+        // unstakeTicket1 is already closed so use a conceptual check
+        // passing user2 as requester for user1's ticket constraint
+        try {
+          await program.methods
+            .processUnstake()
+            .accounts({
+              admin: admin.publicKey,
+              requester: user2.publicKey, // ← wrong requester
+              pool: poolPda,
+              reserveAccount: reservePda,
+              unstakeTicket: unstakeTicket1Pda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
 
-    //       assert.fail("Should have thrown an error");
-    //     } catch (err: any) {
-    //       console.log("Expected error caught:", err.message);
-    //       assert.ok(
-    //         err.message.includes("KeyMismatch") ||
-    //           err.message.includes("Account does not exist") ||
-    //           err.message.includes("Error"),
-    //         "Should fail because requester does not match ticket",
-    //       );
-    //       console.log("✅ Correctly rejected wrong requester");
-    //     }
-    //   });
-    // });
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          // console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("KeyMismatch") ||
+              err.message.includes("Account does not exist") ||
+              err.message.includes("Error"),
+            "Should fail because requester does not match ticket",
+          );
+        }
+      });
+    });
   });
-
-  // describe.skip("PROCESS_UNSTAKE", async () => {
-  //   describe("Success case", () => {
-  //     it("successfully transfer the reward and amount to requester1", async () => {
-  //       const poolBefore = await program.account.pool.fetch(poolPda);
-
-  //       let user1WalletBalanceBefore = await provider.connection.getBalance(
-  //         user1.publicKey,
-  //       );
-  //       console.log(
-  //         "user1 balance before: ",
-  //         user1WalletBalanceBefore.toString(),
-  //       );
-
-  //       let reserveBalanceBefore = await provider.connection.getBalance(
-  //         reservePda,
-  //       );
-  //       console.log(
-  //         "reserve balance before: ",
-  //         reserveBalanceBefore.toString(),
-  //       );
-
-  //       let unstakeTicketBefore = await program.account.unstakeTicket.fetch(
-  //         unstakeTicket1Pda,
-  //       );
-  //       console.log(
-  //         "requested amount: ",
-  //         unstakeTicketBefore.requestedAmount.toString(),
-  //       );
-
-  //       const tx = await program.methods
-  //         .processUnstake()
-  //         .accounts({
-  //           requester: user1.publicKey,
-  //           pool: poolPda,
-  //           reserveAccount: reservePda,
-  //           unstakeTicket: unstakeTicket1Pda,
-  //           systemProgram: anchor.web3.SystemProgram.programId,
-  //           tokenProgram: TOKEN_PROGRAM_ID,
-  //         })
-  //         .signers([])
-  //         .rpc({ commitment: "confirmed" });
-
-  //       let userWalletBalanceAfter = await provider.connection.getBalance(
-  //         user1.publicKey,
-  //       );
-  //       console.log("balance after: ", userWalletBalanceAfter.toString());
-
-  //       let reserveBalanceAfter = await provider.connection.getBalance(
-  //         reservePda,
-  //       );
-  //       console.log("balance after: ", reserveBalanceAfter.toString());
-
-  //       // assert.equal(
-  //       //   userWalletBalanceAfter,
-  //       //   userWalletBalanceAfter + ,
-  //       //   "Should not be released yet",
-  //       // );
-  //     });
-  //   });
 });
 
 async function airdrop(connection: any, address: any, amount = 1000000000) {
@@ -2347,11 +2286,3 @@ async function airdrop(connection: any, address: any, amount = 1000000000) {
     "confirmed",
   );
 }
-
-async function validatePoolEqual(
-  program: anchor.Program<Stakely>,
-  admin: PublicKey,
-  user1: PublicKey,
-  user2: PublicKey,
-  error: String,
-) {}
