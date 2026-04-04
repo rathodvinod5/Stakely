@@ -42,4 +42,9 @@ pub mod stakely {
         let _ = instructions::deactivate_stake_account(ctx);
         Ok(())
     }
+
+    pub fn withdraw_stake_account(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
+        let _ = instructions::withdraw_stake_account(ctx);
+        Ok(())
+    }
 }

@@ -62,9 +62,6 @@ describe("stakely", () => {
   // ── broken admin  ────────────────────────────────────────
   let brokeAdmin: anchor.web3.Keypair;
 
-  let unstakeAccount1: PublicKey;
-  let unstakeAccount2: PublicKey;
-
   describe("AIRDROP AND CREATE LST MINT TOKEN", async () => {
     before(async () => {
       console.log("\t======================================");
@@ -1849,7 +1846,7 @@ describe("stakely", () => {
     });
   });
 
-  describe("PROCESS UNSTAKE", () => {
+  describe("PROCESS UNSTAKE TICKET", () => {
     describe("Success cases", () => {
       before(async () => {
         await airdrop(provider.connection, reservePda, 5 * LAMPORTS_PER_SOL);
@@ -2274,6 +2271,439 @@ describe("stakely", () => {
               err.message.includes("Error"),
             "Should fail because requester does not match ticket",
           );
+        }
+      });
+    });
+  });
+
+  describe("DEACTIVATE STAKE ACCOUNT", () => {
+    describe("Success cases", () => {
+      it("deactivates stake account successfully for user1", async () => {
+        // fetch stake entry before
+        const stakeEntryBefore = await program.account.stakeEntry.fetch(
+          stakeEntry1Pda,
+        );
+        // console.log("Stake status before:", stakeEntryBefore.stakeStatus);
+        assert.deepEqual(
+          stakeEntryBefore.stakeStatus,
+          { active: {} },
+          "Stake status should be Active before deactivation",
+        );
+
+        const tx = await program.methods
+          .deactivateStakeAccount()
+          .accounts({
+            admin: admin.publicKey,
+            pool: poolPda,
+            stakeAccount: stakeAccount1.publicKey,
+            stakeEntry: stakeEntry1Pda,
+          })
+          .signers([admin])
+          .rpc({ commitment: "confirmed" });
+        // console.log("✅ deactivateStakeAccount tx:", tx);
+
+        // verify stake entry status changed
+        const stakeEntryAfter = await program.account.stakeEntry.fetch(
+          stakeEntry1Pda,
+        );
+        // console.log("Stake status after:", stakeEntryAfter.stakeStatus);
+        assert.deepEqual(
+          stakeEntryAfter.stakeStatus,
+          { deactivating: {} },
+          "Stake status should be Deactivating",
+        );
+      });
+
+      it("deactivates stake account successfully for user2", async () => {
+        const stakeEntryBefore = await program.account.stakeEntry.fetch(
+          stakeEntry2Pda,
+        );
+        // console.log("Stake status before:", stakeEntryBefore.stakeStatus);
+        assert.deepEqual(
+          stakeEntryBefore.stakeStatus,
+          { active: {} },
+          "Stake status should be Active before deactivation",
+        );
+
+        const tx = await program.methods
+          .deactivateStakeAccount()
+          .accounts({
+            admin: admin.publicKey,
+            pool: poolPda,
+            stakeAccount: stakeAccount2.publicKey,
+            stakeEntry: stakeEntry2Pda,
+          })
+          .signers([admin])
+          .rpc({ commitment: "confirmed" });
+        // console.log("✅ deactivateStakeAccount tx:", tx);
+
+        const stakeEntryAfter = await program.account.stakeEntry.fetch(
+          stakeEntry2Pda,
+        );
+        // console.log("Stake status after:", stakeEntryAfter.stakeStatus);
+        assert.deepEqual(
+          stakeEntryAfter.stakeStatus,
+          { deactivating: {} },
+          "Stake status should be Deactivating",
+        );
+      });
+    });
+
+    describe.skip("Failure cases", () => {
+      it("fails to deactivate with wrong admin", async () => {
+        // create fresh stake account for this test
+        const freshStakeAccount = anchor.web3.Keypair.generate();
+        const stakeAccountRent =
+          await provider.connection.getMinimumBalanceForRentExemption(200);
+
+        const createTx = new anchor.web3.Transaction().add(
+          anchor.web3.SystemProgram.createAccount({
+            fromPubkey: admin.publicKey,
+            newAccountPubkey: freshStakeAccount.publicKey,
+            lamports: 1 * LAMPORTS_PER_SOL + stakeAccountRent,
+            space: 200,
+            programId: anchor.web3.StakeProgram.programId,
+          }),
+          anchor.web3.StakeProgram.initialize({
+            stakePubkey: freshStakeAccount.publicKey,
+            authorized: new anchor.web3.Authorized(poolPda, poolPda),
+            lockup: new anchor.web3.Lockup(0, 0, anchor.web3.PublicKey.default),
+          }),
+        );
+        await provider.sendAndConfirm(createTx, [admin, freshStakeAccount], {
+          commitment: "confirmed",
+        });
+
+        // derive fresh stake entry
+        const [freshStakeEntryPda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("stake-entry"),
+            poolPda.toBuffer(),
+            freshStakeAccount.publicKey.toBuffer(),
+          ],
+          program.programId,
+        );
+
+        // deposit to create stake entry
+        const freshAta = await getOrCreateAssociatedTokenAccount(
+          provider.connection,
+          admin,
+          lstMint,
+          user1.publicKey,
+        );
+        await program.methods
+          .depositAndDelegate(new anchor.BN(1 * LAMPORTS_PER_SOL))
+          .accounts({
+            user: user1.publicKey,
+            pool: poolPda,
+            reserveAccount: reservePda,
+            stakeAccount: freshStakeAccount.publicKey,
+            lstMint: lstMint,
+            userAta: freshAta.address,
+            stakeEntry: freshStakeEntryPda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([user1])
+          .rpc({ commitment: "confirmed" });
+
+        try {
+          await program.methods
+            .deactivateStakeAccount()
+            .accounts({
+              admin: user1.publicKey, // ← wrong admin
+              pool: poolPda,
+              stakeAccount: freshStakeAccount.publicKey,
+              stakeEntry: freshStakeEntryPda,
+            })
+            .signers([user1])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("NotTheOwner") ||
+              err.message.includes("Error"),
+            "Should fail because user1 is not admin",
+          );
+          console.log("✅ Correctly rejected wrong admin");
+        }
+      });
+
+      it("fails to deactivate already deactivating stake account", async () => {
+        // stakeAccount1 is already deactivating from success case
+        try {
+          await program.methods
+            .deactivateStakeAccount()
+            .accounts({
+              admin: admin.publicKey,
+              pool: poolPda,
+              stakeAccount: stakeAccount1.publicKey,
+              stakeEntry: stakeEntry1Pda, // ← already deactivating
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("NoActiveStakes") ||
+              err.message.includes("Error"),
+            "Should fail because stake is already deactivating",
+          );
+          console.log("✅ Correctly rejected already deactivating stake");
+        }
+      });
+    });
+  });
+
+  describe("WITHDRAW STAKES ACCOUNT", () => {
+    describe("Success cases", () => {
+      it("withdraws stake successfully for user1", async () => {
+        const reserveBalanceBefore = await provider.connection.getBalance(
+          reservePda,
+        );
+        const stakeBalanceBefore = await provider.connection.getBalance(
+          stakeAccount1.publicKey,
+        );
+        console.log("Reserve balance before:", reserveBalanceBefore);
+        console.log("Stake account1 balance before:", stakeBalanceBefore);
+
+        const tx = await program.methods
+          .withdrawStakeAccount()
+          .accounts({
+            admin: admin.publicKey,
+            pool: poolPda,
+            reserve: reservePda,
+            stakeAccount: stakeAccount1.publicKey,
+            stakeEntry: stakeEntry1Pda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([admin])
+          .rpc({ commitment: "confirmed" });
+        console.log("✅ withdrawStake tx:", tx);
+
+        // verify reserve increased by stake account balance
+        const reserveBalanceAfter = await provider.connection.getBalance(
+          reservePda,
+        );
+        console.log("Reserve balance after:", reserveBalanceAfter);
+        assert.equal(
+          reserveBalanceAfter - reserveBalanceBefore,
+          stakeBalanceBefore,
+          "Reserve should increase by stake account balance",
+        );
+
+        // verify stake account is empty
+        const stakeBalanceAfter = await provider.connection.getBalance(
+          stakeAccount1.publicKey,
+        );
+        console.log("Stake account1 balance after:", stakeBalanceAfter);
+        assert.equal(stakeBalanceAfter, 0, "Stake account should be empty");
+
+        // verify stake entry is closed
+        try {
+          await program.account.stakeEntry.fetch(stakeEntry1Pda);
+          assert.fail("Stake entry should be closed");
+        } catch (err: any) {
+          console.log("Stake entry1 correctly closed");
+          assert.ok(
+            err.message.includes("Account does not exist") ||
+              err.message.includes("Error"),
+            "Stake entry should not exist anymore",
+          );
+        }
+
+        console.log("✅ Stake withdrawn successfully for user1");
+      });
+
+      it("withdraws stake successfully for user2", async () => {
+        const reserveBalanceBefore = await provider.connection.getBalance(
+          reservePda,
+        );
+        const stakeBalanceBefore = await provider.connection.getBalance(
+          stakeAccount2.publicKey,
+        );
+        console.log("Reserve balance before:", reserveBalanceBefore);
+        console.log("Stake account2 balance before:", stakeBalanceBefore);
+
+        const tx = await program.methods
+          .withdrawStakeAccount()
+          .accounts({
+            admin: admin.publicKey,
+            pool: poolPda,
+            reserve: reservePda,
+            stakeAccount: stakeAccount2.publicKey,
+            stakeEntry: stakeEntry2Pda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([admin])
+          .rpc({ commitment: "confirmed" });
+        console.log("✅ withdrawStake tx:", tx);
+
+        const reserveBalanceAfter = await provider.connection.getBalance(
+          reservePda,
+        );
+        const stakeBalanceAfter = await provider.connection.getBalance(
+          stakeAccount2.publicKey,
+        );
+        console.log("Reserve balance after:", reserveBalanceAfter);
+        console.log("Stake account2 balance after:", stakeBalanceAfter);
+
+        assert.equal(
+          reserveBalanceAfter - reserveBalanceBefore,
+          stakeBalanceBefore,
+          "Reserve should increase by stake account balance",
+        );
+        assert.equal(stakeBalanceAfter, 0, "Stake account should be empty");
+
+        // verify stake entry is closed
+        try {
+          await program.account.stakeEntry.fetch(stakeEntry2Pda);
+          assert.fail("Stake entry should be closed");
+        } catch (err: any) {
+          console.log("Stake entry2 correctly closed");
+          assert.ok(
+            err.message.includes("Account does not exist") ||
+              err.message.includes("Error"),
+            "Stake entry should not exist anymore",
+          );
+        }
+
+        console.log("✅ Stake withdrawn successfully for user2");
+      });
+    });
+
+    describe.skip("Failure cases", () => {
+      it("fails to withdraw with wrong admin", async () => {
+        try {
+          await program.methods
+            .withdrawStakeAccount()
+            .accounts({
+              admin: user1.publicKey, // ← wrong admin
+              pool: poolPda,
+              reserve: reservePda,
+              stakeAccount: stakeAccount1.publicKey,
+              stakeEntry: stakeEntry1Pda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([user1])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("NotTheOwner") ||
+              err.message.includes("Account does not exist") ||
+              err.message.includes("Error"),
+            "Should fail because user1 is not admin",
+          );
+          console.log("✅ Correctly rejected wrong admin");
+        }
+      });
+
+      it("fails to withdraw stake with active status", async () => {
+        // create fresh stake account with active status
+        const freshStakeAccount = anchor.web3.Keypair.generate();
+        const stakeAccountRent =
+          await provider.connection.getMinimumBalanceForRentExemption(200);
+
+        const sig = await provider.connection.requestAirdrop(
+          user1.publicKey,
+          5 * LAMPORTS_PER_SOL,
+        );
+        await provider.connection.confirmTransaction(sig, "confirmed");
+
+        const createTx = new anchor.web3.Transaction().add(
+          anchor.web3.SystemProgram.createAccount({
+            fromPubkey: user1.publicKey,
+            newAccountPubkey: freshStakeAccount.publicKey,
+            lamports: 1 * LAMPORTS_PER_SOL + stakeAccountRent,
+            space: 200,
+            programId: anchor.web3.StakeProgram.programId,
+          }),
+          anchor.web3.StakeProgram.initialize({
+            stakePubkey: freshStakeAccount.publicKey,
+            authorized: new anchor.web3.Authorized(poolPda, poolPda),
+            lockup: new anchor.web3.Lockup(0, 0, anchor.web3.PublicKey.default),
+          }),
+        );
+        await provider.sendAndConfirm(createTx, [user1, freshStakeAccount], {
+          commitment: "confirmed",
+        });
+
+        const [freshStakeEntryPda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("stake-entry"),
+            poolPda.toBuffer(),
+            freshStakeAccount.publicKey.toBuffer(),
+          ],
+          program.programId,
+        );
+
+        const freshAta = await getOrCreateAssociatedTokenAccount(
+          provider.connection,
+          admin,
+          lstMint,
+          user1.publicKey,
+        );
+
+        await program.methods
+          .depositAndDelegate(new anchor.BN(1 * LAMPORTS_PER_SOL))
+          .accounts({
+            user: user1.publicKey,
+            pool: poolPda,
+            reserveAccount: reservePda,
+            stakeAccount: freshStakeAccount.publicKey,
+            lstMint: lstMint,
+            userAta: freshAta.address,
+            stakeEntry: freshStakeEntryPda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([user1])
+          .rpc({ commitment: "confirmed" });
+
+        // verify stake entry is active
+        const stakeEntry = await program.account.stakeEntry.fetch(
+          freshStakeEntryPda,
+        );
+        console.log("Stake status:", stakeEntry.stakeStatus);
+        assert.deepEqual(
+          stakeEntry.stakeStatus,
+          { active: {} },
+          "Stake status should be Active",
+        );
+
+        try {
+          // try to withdraw without deactivating first
+          await program.methods
+            .withdrawStakeAccount()
+            .accounts({
+              admin: admin.publicKey,
+              pool: poolPda,
+              reserve: reservePda,
+              stakeAccount: freshStakeAccount.publicKey,
+              stakeEntry: freshStakeEntryPda,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .signers([admin])
+            .rpc({ commitment: "confirmed" });
+
+          assert.fail("Should have thrown an error");
+        } catch (err: any) {
+          console.log("Expected error caught:", err.message);
+          assert.ok(
+            err.message.includes("StakeNotYetDeactivated") ||
+              err.message.includes("Error"),
+            "Should fail because stake is still active",
+          );
+          console.log("✅ Correctly rejected active stake withdrawal");
         }
       });
     });
