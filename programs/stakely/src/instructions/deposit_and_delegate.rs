@@ -164,10 +164,10 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
     let stake_account = &ctx.accounts.stake_account;
 
     // validate conditions
-    require!(
-        stake_account.owner == &Pubkey::from(solana_program::stake::program::ID),
-        CustomErrors::NotTheOwner
-    );
+    // require!(
+    //     stake_account.owner == &Pubkey::from(solana_program::stake::program::ID),
+    //     CustomErrors::NotTheOwner
+    // );
     // require_keys_eq!(reserve_account.owner, &crate::ID, CustomErrors::NotTheOwner);
 
     let actual_amount = stake_account.lamports();

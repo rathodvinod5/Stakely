@@ -1,4 +1,4 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, system_program::{self, transfer}};
 use solana_program::{
     stake::{
         state::{ StakeStateV2 },
@@ -11,12 +11,13 @@ use solana_program::{
 use crate::states::{ Pool, StakeEntry, StakeStatus };
 use crate::errors::{ CustomErrors };
 
-pub fn withdraw_stake(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
+pub fn withdraw_stake_account(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
     let stake_account = &ctx.accounts.stake_account;
     let stake_entry = &mut ctx.accounts.stake_entry;
+    // let system_program = &ctx.accounts.system_program;
 
-    let clock: Clock = Clock::from_account_info(&ctx.accounts.clock_sysvar)?;
+    // let clock: Clock = Clock::from_account_info(&ctx.accounts.clock_sysvar)?;
 
      // validate stake account matches stake entry
     require!(
@@ -78,19 +79,40 @@ pub fn withdraw_stake(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
     // msg!("Stake withdrawn: {} lamports to reserve", all_lamports);
     // =====================================================================
 
-    
+
     require!(
         stake_entry.stake_status == StakeStatus::Deactivating,
         CustomErrors::StakeNotYetDeactivated
     );
 
-    // simplified: transfer lamports from stake account to reserve directly
+   require!(
+        stake_entry.stake_status == StakeStatus::Deactivating,
+        CustomErrors::StakeNotYetDeactivated
+    );
+
     let stake_lamports = stake_account.lamports();
     require!(stake_lamports > 0, CustomErrors::InsufficientBalance);
 
-    // transfer lamports from stake account to reserve
-    **stake_account.try_borrow_mut_lamports()? -= stake_lamports;
-    **ctx.accounts.reserve_account.try_borrow_mut_lamports()? += stake_lamports;
+    // pool PDA has withdraw authority over stake account
+    // so we use pool PDA seeds to sign the transfer CPI
+    let pool_key = pool.lst_mint;
+    let seeds = &[
+        b"pool".as_ref(),
+        pool_key.as_ref(),
+        &[pool.bump],
+    ];
+    let signer_seeds = &[&seeds[..]];
+
+    // CPI to system program to transfer lamports
+    // pool PDA signs as the withdraw authority
+    let cpi_context = CpiContext::new_with_signer(
+        ctx.accounts.system_program.to_account_info(),
+        system_program::Transfer {
+            from: ctx.accounts.stake_account.to_account_info(),
+            to: ctx.accounts.reserve_account.to_account_info(),
+        },
+        signer_seeds,
+    );
 
     stake_entry.stake_status = StakeStatus::Deactive;
 
@@ -126,8 +148,10 @@ pub struct WithdrawStakeAmount<'info> {
     pub stake_program: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
+
     // pub clock: Sysvar<'info, Clock>
-    /// System clock (needed to check epoch/deactivation)
-    #[account(address = solana_program::sysvar::clock::id())]
-    pub clock_sysvar: AccountInfo<'info>,
+
+    // // System clock (needed to check epoch/deactivation)
+    // #[account(address = solana_program::sysvar::clock::id())]
+    // pub clock_sysvar: AccountInfo<'info>,
 }

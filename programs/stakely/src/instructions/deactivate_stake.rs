@@ -71,8 +71,8 @@ pub struct DeactivateStakeAccount<'info> {
     pub stake_entry: Account<'info, StakeEntry>,
 
 
-    #[account(address = solana_program::stake::program::ID)]
-    pub stake_program: AccountInfo<'info>,
-
-    pub clock: Sysvar<'info, Clock>
+    // #[account(address = solana_program::stake::program::ID)]
+    // pub stake_program: AccountInfo<'info>,
+    // pub clock: Sysvar<'info, Clock>
+    
 }
