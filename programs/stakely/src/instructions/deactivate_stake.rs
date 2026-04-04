@@ -16,49 +16,61 @@ pub fn deactivate_stake_account(ctx: Context<DeactivateStakeAccount>) -> Result<
 
     require!(stake_entry.pool == pool.key(), CustomErrors::KeyMismatch);
 
-    let deactivate_ix = deactivate_stake(
-        &stake_account.key(), 
-        &pool.key()
-    );
-    let seeds = &[b"pool", pool.lst_mint.as_ref(), &[pool.bump]];
-    let signer_seeds = &[&seeds[..]];
+    // ========================== not required ==========================
+    // because we do not have real validator
+    // let deactivate_ix = deactivate_stake(
+    //     &stake_account.key(), 
+    //     &pool.key()
+    // );
+    // let seeds = &[b"pool", pool.lst_mint.as_ref(), &[pool.bump]];
+    // let signer_seeds = &[&seeds[..]];
 
-    let result = invoke_signed(
-        &deactivate_ix, 
-        &[
-            stake_account.to_account_info(),
-            ctx.accounts.clock.to_account_info(),
-            ctx.accounts.stake_program.to_account_info(),
-        ], 
-        signer_seeds
-    );
-
-    // if !pool.deactivating_stake_accounts.contains(&stake_account.key()) { // uncomment this later
-    //     pool.deactivating_stake_accounts.push(stake_account.key());
-    // }
+    // let result = invoke_signed(
+    //     &deactivate_ix, 
+    //     &[
+    //         stake_account.to_account_info(),
+    //         ctx.accounts.clock.to_account_info(),
+    //         pool.to_account_info(),
+    //         ctx.accounts.stake_program.to_account_info(),
+    //     ], 
+    //     signer_seeds
+    // )?;
+    // ====================================================================
 
     stake_entry.stake_status = StakeStatus::Deactivating;
+
+    msg!("Stake account deactivated: {}", stake_account.key());
 
     Ok(())
 }
 
 #[derive(Accounts)]
 pub struct DeactivateStakeAccount<'info> {
-    /// CHECK:
-    #[account(mut, signer)]
-    pub admin: AccountInfo<'info>,
+    /// CHECK: must match pool.admin
+    #[account(
+        mut,  
+        constraint = admin.key() == pool.admin @ CustomErrors::NotTheOwner
+    )]
+    pub admin: Signer<'info>,
 
-    #[account(mut, has_one = admin)]
+    #[account(
+        mut, 
+        has_one = admin @ CustomErrors::NotTheOwner
+    )]
     pub pool: Account<'info, Pool>,
 
-    /// CHECK:
-    #[account(mut)]
-    pub stake_account: AccountInfo<'info>,
 
-    #[account(mut, has_one = pool.key())]
+    #[account(mut)]
+    pub stake_account: UncheckedAccount<'info>,
+
+    #[account(
+        mut, 
+        has_one = pool,
+        constraint = stake_account.key() == stake_entry.stake_account @ CustomErrors::InvalidStakeAccount
+    )]
     pub stake_entry: Account<'info, StakeEntry>,
 
-    /// CHECK:
+
     #[account(address = solana_program::stake::program::ID)]
     pub stake_program: AccountInfo<'info>,
 
