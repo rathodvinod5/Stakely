@@ -172,7 +172,7 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
 
     let current_program_id = crate::ID;
     require!(stake_account.owner == &current_program_id, CustomErrors::NotTheOwner);
-    msg!("stake_account owner: {}, {}", stake_account.owner, current_program_id);
+    // msg!("stake_account owner: {}, {}", stake_account.owner, current_program_id);
 
     let actual_amount = stake_account.lamports();
     let rent_exempt =
@@ -264,7 +264,6 @@ pub struct DepositAndDelegate<'info> {
         owner = crate::ID,
         address = pool.reserve_account
     )]
-    // pub reserve_account: AccountInfo<'info>,
     pub reserve_account: UncheckedAccount<'info>,
 
     #[account(mut)]

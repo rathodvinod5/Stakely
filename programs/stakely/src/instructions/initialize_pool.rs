@@ -31,8 +31,6 @@ pub fn initialize_pool(ctx: Context<InitializePool>) -> Result<()> {
     pool.unstaked_count = 0;
     pool.bump = ctx.bumps.pool;
     pool.reserve_bump = ctx.bumps.reserve_account;
-    // pool.deactivating_stake_accounts = Vec::new();
-    // pool.deactivating_stake_accounts = vec![]; // Vec::<Pubkey>::new();
 
     Ok(())
 }
