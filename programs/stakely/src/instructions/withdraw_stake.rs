@@ -13,19 +13,20 @@ use crate::errors::{ CustomErrors };
 
 pub fn withdraw_stake_account(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
-    let stake_account = &ctx.accounts.stake_account;
+    let stake_account = &mut ctx.accounts.stake_account;
     let stake_entry = &mut ctx.accounts.stake_entry;
+    let reserve_account = &mut ctx.accounts.reserve_account;
     // let system_program = &ctx.accounts.system_program;
 
+    // ========================== not required ==========================
     // let clock: Clock = Clock::from_account_info(&ctx.accounts.clock_sysvar)?;
 
-     // validate stake account matches stake entry
-    require!(
-        stake_account.key() == stake_entry.stake_account,
-        CustomErrors::InvalidStakeAccount
-    );
+    // validate stake account matches stake entry
+    // require!(
+    //     stake_account.key() == stake_entry.stake_account,
+    //     CustomErrors::InvalidStakeAccount
+    // );
 
-    // ========================== not required ==========================
     // // --- Load stake state ---
     // let stake_state: StakeStateV2 = StakeStateV2::deserialize(&mut &ctx.accounts.stake_account.data.borrow()[..])
     //     .map_err(|_| error!(CustomErrors::InvalidStakeState))?;
@@ -81,6 +82,11 @@ pub fn withdraw_stake_account(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
 
 
     require!(
+        stake_account.key() == stake_entry.stake_account,
+        CustomErrors::InvalidStakeAccount
+    );
+
+    require!(
         stake_entry.stake_status == StakeStatus::Deactivating,
         CustomErrors::StakeNotYetDeactivated
     );
@@ -91,30 +97,44 @@ pub fn withdraw_stake_account(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
     );
 
     let stake_lamports = stake_account.lamports();
+    // let mut reserve_lamports = ctx.accounts.reserve_account.get_lamports();
     require!(stake_lamports > 0, CustomErrors::InsufficientBalance);
 
     // pool PDA has withdraw authority over stake account
     // so we use pool PDA seeds to sign the transfer CPI
-    let pool_key = pool.lst_mint;
-    let seeds = &[
-        b"pool".as_ref(),
-        pool_key.as_ref(),
-        &[pool.bump],
-    ];
-    let signer_seeds = &[&seeds[..]];
+    // let pool_key = pool.lst_mint;
+    // let seeds = &[
+    //     b"pool".as_ref(),
+    //     pool_key.as_ref(),
+    //     &[pool.bump],
+    // ];
+    // let signer_seeds = &[&seeds[..]];
 
+    // msg!("Reserve amount before: {} lamports", reserve_lamports);
+    msg!("Details of the stake account: {}", stake_account.owner);
+    msg!("Details of the reserve account: {:?}", reserve_account.to_account_info().lamports());
     // CPI to system program to transfer lamports
     // pool PDA signs as the withdraw authority
-    let cpi_context = CpiContext::new_with_signer(
-        ctx.accounts.system_program.to_account_info(),
-        system_program::Transfer {
-            from: ctx.accounts.stake_account.to_account_info(),
-            to: ctx.accounts.reserve_account.to_account_info(),
-        },
-        signer_seeds,
-    );
+    // let cpi_context = CpiContext::new_with_signer(
+    //     ctx.accounts.system_program.to_account_info(),
+    //     system_program::Transfer {
+    //         from: ctx.accounts.stake_account.to_account_info(),
+    //         to: ctx.accounts.reserve_account.to_account_info(),
+    //     },
+    //     signer_seeds,
+    // );
+
+    // directly manipulate lamports
+    // this works because:
+    // 1. stake_account is owned by your program (not stake program)
+    // 2. reserve_account is owned by your program
+    // only the OWNER program can debit an account's lamports
+    **stake_account.try_borrow_mut_lamports()? -= stake_lamports;
+    **reserve_account.try_borrow_mut_lamports()? += stake_lamports;
 
     stake_entry.stake_status = StakeStatus::Deactive;
+
+    msg!("Stake withdrawn: {} lamports to reserve", ctx.accounts.reserve_account.get_lamports());
 
     Ok(())
 }
@@ -144,8 +164,8 @@ pub struct WithdrawStakeAmount<'info> {
     pub stake_entry: Account<'info, StakeEntry>,
 
     /// CHECK: validated via address constraint
-    #[account(address = solana_program::stake::program::ID)]
-    pub stake_program: AccountInfo<'info>,
+    // #[account(address = solana_program::stake::program::ID)]
+    // pub stake_program: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
 
