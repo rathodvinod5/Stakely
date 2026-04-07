@@ -68,11 +68,5 @@ pub struct DeactivateStakeAccount<'info> {
         has_one = pool,
         constraint = stake_account.key() == stake_entry.stake_account @ CustomErrors::InvalidStakeAccount
     )]
-    pub stake_entry: Account<'info, StakeEntry>,
-
-
-    // #[account(address = solana_program::stake::program::ID)]
-    // pub stake_program: AccountInfo<'info>,
-    // pub clock: Sysvar<'info, Clock>
-    
+    pub stake_entry: Account<'info, StakeEntry>
 }

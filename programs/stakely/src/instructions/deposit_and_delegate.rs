@@ -170,6 +170,10 @@ pub fn deposit_and_delegate(ctx: Context<DepositAndDelegate>, stake_amount: u64)
     // );
     // require_keys_eq!(reserve_account.owner, &crate::ID, CustomErrors::NotTheOwner);
 
+    let current_program_id = crate::ID;
+    require!(stake_account.owner == &current_program_id, CustomErrors::NotTheOwner);
+    // msg!("stake_account owner: {}, {}", stake_account.owner, current_program_id);
+
     let actual_amount = stake_account.lamports();
     let rent_exempt =
         Rent::get()?.minimum_balance(std::mem::size_of::<stake::state::StakeState>());
@@ -260,7 +264,6 @@ pub struct DepositAndDelegate<'info> {
         owner = crate::ID,
         address = pool.reserve_account
     )]
-    // pub reserve_account: AccountInfo<'info>,
     pub reserve_account: UncheckedAccount<'info>,
 
     #[account(mut)]
@@ -271,7 +274,7 @@ pub struct DepositAndDelegate<'info> {
 
     #[account(mut)]
     pub user_ata: Account<'info, TokenAccount>,
-    // pub user_ata: UncheckedAccount<'info>,
+
     #[account(
         init,
         payer = user,
@@ -281,13 +284,7 @@ pub struct DepositAndDelegate<'info> {
     )]
     pub stake_entry: Account<'info, StakeEntry>,
 
-    // #[account(
-    //     seeds = [b"pool", lst_mint.key().as_ref()],
-    //     bump
-    // )]
-    // pub pool_signer: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
-    // pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
 }

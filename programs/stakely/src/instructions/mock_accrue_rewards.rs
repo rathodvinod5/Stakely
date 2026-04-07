@@ -25,7 +25,6 @@ pub fn mock_accrue_rewards(ctx: Context<MockAccrueRewards>, reward_amount: u64) 
         admin_lamports >= reward_amount,
         CustomErrors::InsufficientBalance
     );
-    // require!(pool.admin.key() == admin.key(), CustomErrors::NotTheOwner);
 
     let instruction = transfer(&admin.key(), &reserve_account.key(), reward_amount);
     let account_infos = &[

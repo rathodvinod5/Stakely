@@ -110,24 +110,6 @@ pub fn process_unstake(ctx: Context<ProcessUnstake>) -> Result<()> {
         CustomErrors::FundAlreadyReleased
     );
 
-    // let pool_key = pool.key();
-    // let seeds = &[
-    //     b"pool-reserve".as_ref(),
-    //     pool_key.as_ref(),
-    //     &[pool.reserve_bump],               // ← uncomment this
-    // ];
-    // let signers_seeds = &[&seeds[..]];
-
-    // invoke_signed(
-    //     &transfer(&reserve_account.key(), &requester.key(), requested_lamports),
-    //     &[
-    //         reserve_account.to_account_info(),
-    //         requester.to_account_info(),
-    //         ctx.accounts.system_program.to_account_info(),
-    //     ],
-    //     signers_seeds,
-    // )?;                                     // ← propagate error
-
     // Ensure the reserve stays rent-exempt (or has enough)
     **reserve_account.try_borrow_mut_lamports()? -= requested_lamports;
 

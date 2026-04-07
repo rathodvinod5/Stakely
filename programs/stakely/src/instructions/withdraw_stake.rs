@@ -5,7 +5,7 @@ use solana_program::{
         instruction:: { withdraw }
     },
     clock::Clock,
-    // sysvar::Sysvar,
+    sysvar::Sysvar,
     program:: { invoke_signed }
 };
 use crate::states::{ Pool, StakeEntry, StakeStatus };
@@ -110,9 +110,6 @@ pub fn withdraw_stake_account(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
     // ];
     // let signer_seeds = &[&seeds[..]];
 
-    // msg!("Reserve amount before: {} lamports", reserve_lamports);
-    msg!("Details of the stake account: {}", stake_account.owner);
-    msg!("Details of the reserve account: {:?}", reserve_account.to_account_info().lamports());
     // CPI to system program to transfer lamports
     // pool PDA signs as the withdraw authority
     // let cpi_context = CpiContext::new_with_signer(
@@ -128,6 +125,10 @@ pub fn withdraw_stake_account(ctx: Context<WithdrawStakeAmount>) -> Result<()> {
     // this works because:
     // 1. stake_account is owned by your program (not stake program)
     // 2. reserve_account is owned by your program
+
+    msg!("Details of the stake account: {}", stake_account.owner);
+    msg!("Details of the reserve account: {:?}", reserve_account.to_account_info().lamports());
+
     // only the OWNER program can debit an account's lamports
     **stake_account.try_borrow_mut_lamports()? -= stake_lamports;
     **reserve_account.try_borrow_mut_lamports()? += stake_lamports;
@@ -170,7 +171,6 @@ pub struct WithdrawStakeAmount<'info> {
     pub system_program: Program<'info, System>,
 
     // pub clock: Sysvar<'info, Clock>
-
     // // System clock (needed to check epoch/deactivation)
     // #[account(address = solana_program::sysvar::clock::id())]
     // pub clock_sysvar: AccountInfo<'info>,
